@@ -145,47 +145,62 @@ void Main()
                                 V3 rd = makeRay(p);
                                 V3 ax = norm(axis);
 
-                                // カメラ視線と軸がほぼ平行な場合はスクリーン座標で計算
+                                auto scrAngle = [&](double axF)->std::optional<double>
+                                        {
+                                                P2 sp = scr(pivot);
+                                                if (std::isinf(sp.x)) return std::nullopt;
+                                                s3d::Vec2 diff = p - s3d::Vec2{ sp.x, sp.y };
+                                                double ang = std::atan2(diff.y, diff.x);
+                                                if (axF < 0) ang = -ang;
+                                                return ang;
+                                        };
+
                                 double axF = dot(ax, F);
-                                if (std::abs(axF) > 0.999)
-                                {
-                                        P2 sp = scr(pivot);
-                                        if (std::isinf(sp.x)) return std::nullopt;
-                                        s3d::Vec2 diff = p - s3d::Vec2{ sp.x, sp.y };
-                                        double ang = std::atan2(diff.y, diff.x);
-                                        if (axF < 0) ang = -ang;
-                                        return ang;
-                                }
 
-                                // カメラと軸の両方に垂直な平面
-                                V3 n = norm(cross(ax, F));
-                                if (len(n) < 1e-6) return std::nullopt;
+                                // 軸とカメラ視線が近い場合はスクリーン計算
+                                if (std::abs(axF) > 0.95)
+                                        return scrAngle(axF);
 
-                                double denom = dot(rd, n);
-                                V3 hit;
+                                V3 nCam = cross(ax, F);
+                                if (len(nCam) < 1e-6)
+                                        return scrAngle(axF);
 
-                                // 1) 交点を求める
+                                // 軸平面との交点
+                                double denom = dot(rd, ax);
+                                V3 hit; bool hitOk = false;
                                 if (std::abs(denom) > 1e-4)
                                 {
-                                        double t = dot(n, pivot - cam) / denom;
-                                        if (t <= 0) return std::nullopt;
-                                        hit = cam + rd * t;
+                                        double t = dot(ax, pivot - cam) / denom;
+                                        if (t > 0)
+                                        {
+                                                hit = cam + rd * t;
+                                                hitOk = true;
+                                        }
                                 }
-                                // 2) 平行時はカメラ平面で代用
-                                else
+
+                                // 平行時はカメラ平面で代用
+                                if (!hitOk)
                                 {
                                         double denomF = dot(rd, F);
-                                        if (std::abs(denomF) < 1e-6) return std::nullopt;
-                                        double t = dot(F, pivot - cam) / denomF;
-                                        if (t <= 0) return std::nullopt;
-                                        hit = cam + rd * t;
+                                        if (std::abs(denomF) > 1e-6)
+                                        {
+                                                double t = dot(F, pivot - cam) / denomF;
+                                                if (t > 0)
+                                                {
+                                                        hit = cam + rd * t;
+                                                        hitOk = true;
+                                                }
+                                        }
                                 }
+
+                                if (!hitOk)
+                                        return scrAngle(axF);
 
                                 V3 v = hit - pivot;
 
                                 // 軸とカメラに基づく基底ベクトル
-                                V3 p1 = norm(cross(ax, n));
-                                V3 p2 = n;
+                                V3 p2 = norm(nCam);
+                                V3 p1 = norm(cross(ax, p2));
 
                                 return std::atan2(dot(v, p2), dot(v, p1));
                         };
