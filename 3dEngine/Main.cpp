@@ -140,38 +140,52 @@ void Main()
 
 
 		/*--- カーソル位置 → 回転角を返す ---*/
-		auto cursorAngle = [&](s3d::Vec2 p, V3 axis, V3 pivot)->std::optional<double>
-			{
-				V3 rd = makeRay(p);
-				double denom = dot(rd, axis);
-				V3 hit;
-				
-					    /* ---------- 1) 軸平面との交点 ---------- */
-					if (std::abs(denom) > 1e-4)               // 十分斜交
-					 {
-					double t = dot(axis, pivot - cam) / denom;
-					if (t <= 0) return std::nullopt;      // 背面
-					hit = cam + rd * t;
-					}
-				    /* ---------- 2) 平行時はカメラ平面で代用 ---------- */
-					else
-					 {
-					double denomF = dot(rd, F);           // F はカメラ前方ベクトル
-					if (std::abs(denomF) < 1e-6) return std::nullopt;
-					double t = dot(F, pivot - cam) / denomF;
-					if (t <= 0) return std::nullopt;
-					hit = cam + rd * t;
-					}
-				V3 v = hit - pivot;
+                auto cursorAngle = [&](s3d::Vec2 p, V3 axis, V3 pivot)->std::optional<double>
+                        {
+                                V3 rd = makeRay(p);
+                                V3 ax = norm(axis);
 
-				/* 軸と垂直な 2 本の基底ベクトルを作る */
-				V3 ax = norm(axis);
-				V3 ref = (std::abs(ax.x) < 0.9) ? V3{ 1,0,0 } : V3{ 0,1,0 };
-				V3 p1 = norm(cross(ax, ref));
-				V3 p2 = cross(ax, p1);
+                                // カメラ視線と軸がほぼ平行な場合はスクリーン座標で計算
+                                double axF = dot(ax, F);
+                                if (std::abs(axF) > 0.999)
+                                {
+                                        P2 sp = scr(pivot);
+                                        if (std::isinf(sp.x)) return std::nullopt;
+                                        s3d::Vec2 diff = p - s3d::Vec2{ sp.x, sp.y };
+                                        double ang = std::atan2(diff.y, diff.x);
+                                        if (axF < 0) ang = -ang;
+                                        return ang;
+                                }
 
-				return std::atan2(dot(v, p2), dot(v, p1));            // -π ～ π
-			};
+                                double denom = dot(rd, ax);
+                                V3 hit;
+
+                                // 1) 軸平面との交点
+                                if (std::abs(denom) > 1e-4)
+                                {
+                                        double t = dot(ax, pivot - cam) / denom;
+                                        if (t <= 0) return std::nullopt;
+                                        hit = cam + rd * t;
+                                }
+                                // 2) 平行時はカメラ平面で代用
+                                else
+                                {
+                                        double denomF = dot(rd, F);
+                                        if (std::abs(denomF) < 1e-6) return std::nullopt;
+                                        double t = dot(F, pivot - cam) / denomF;
+                                        if (t <= 0) return std::nullopt;
+                                        hit = cam + rd * t;
+                                }
+
+                                V3 v = hit - pivot;
+
+                                // 軸と垂直な 2 本の基底ベクトルを作る
+                                V3 ref = (std::abs(ax.x) < 0.9) ? V3{ 1,0,0 } : V3{ 0,1,0 };
+                                V3 p1 = norm(cross(ax, ref));
+                                V3 p2 = cross(ax, p1);
+
+                                return std::atan2(dot(v, p2), dot(v, p1));
+                        };
 
 
 		/*--- Hover キューブ（スクリーン AABB 判定） ---*/
