@@ -158,7 +158,7 @@ void Main()
                                 double axF = dot(ax, F);
 
                                 // 軸とカメラ視線が近い場合はスクリーン計算
-                                if (std::abs(axF) > 0.95)
+                                if (std::abs(axF) > 0.9)
                                         return scrAngle(axF);
 
                                 V3 nCam = cross(ax, F);
@@ -171,11 +171,8 @@ void Main()
                                 if (std::abs(denom) > 1e-4)
                                 {
                                         double t = dot(ax, pivot - cam) / denom;
-                                        if (t > 0)
-                                        {
-                                                hit = cam + rd * t;
-                                                hitOk = true;
-                                        }
+                                        hit = cam + rd * t;
+                                        hitOk = true;
                                 }
 
                                 // 平行時はカメラ平面で代用
@@ -185,11 +182,8 @@ void Main()
                                         if (std::abs(denomF) > 1e-6)
                                         {
                                                 double t = dot(F, pivot - cam) / denomF;
-                                                if (t > 0)
-                                                {
-                                                        hit = cam + rd * t;
-                                                        hitOk = true;
-                                                }
+                                                hit = cam + rd * t;
+                                                hitOk = true;
                                         }
                                 }
 
