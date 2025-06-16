@@ -145,41 +145,49 @@ void Main()
                                 V3 rd = makeRay(p);
                                 V3 ax = norm(axis);
 
+                                auto scrAngle = [&](double axF)->std::optional<double>
+                                        {
+                                                P2 sp = scr(pivot);
+                                                if (std::isinf(sp.x)) return std::nullopt;
+                                                s3d::Vec2 diff = p - s3d::Vec2{ sp.x, sp.y };
+                                                double ang = std::atan2(diff.y, diff.x);
+                                                if (axF < 0) ang = -ang;
+                                                return ang;
+                                        };
+
                                 // カメラ視線と軸がほぼ平行な場合はスクリーン座標で計算
                                 double axF = dot(ax, F);
-                                if (std::abs(axF) > 0.999)
-                                {
-                                        P2 sp = scr(pivot);
-                                        if (std::isinf(sp.x)) return std::nullopt;
-                                        s3d::Vec2 diff = p - s3d::Vec2{ sp.x, sp.y };
-                                        double ang = std::atan2(diff.y, diff.x);
-                                        if (axF < 0) ang = -ang;
-                                        return ang;
-                                }
+                                if (std::abs(axF) > 0.95)
+                                        return scrAngle(axF);
 
                                 // カメラと軸の両方に垂直な平面
                                 V3 n = norm(cross(ax, F));
-                                if (len(n) < 1e-6) return std::nullopt;
+                                if (len(n) < 1e-6) return scrAngle(axF);
 
                                 double denom = dot(rd, n);
-                                V3 hit;
+                                V3 hit; bool hitOk = false;
 
                                 // 1) 交点を求める
                                 if (std::abs(denom) > 1e-4)
                                 {
                                         double t = dot(n, pivot - cam) / denom;
-                                        if (t <= 0) return std::nullopt;
                                         hit = cam + rd * t;
+                                        hitOk = true;
                                 }
                                 // 2) 平行時はカメラ平面で代用
                                 else
                                 {
                                         double denomF = dot(rd, F);
-                                        if (std::abs(denomF) < 1e-6) return std::nullopt;
-                                        double t = dot(F, pivot - cam) / denomF;
-                                        if (t <= 0) return std::nullopt;
-                                        hit = cam + rd * t;
+                                        if (std::abs(denomF) > 1e-6)
+                                        {
+                                                double t = dot(F, pivot - cam) / denomF;
+                                                hit = cam + rd * t;
+                                                hitOk = true;
+                                        }
                                 }
+
+                                if (!hitOk)
+                                        return scrAngle(axF);
 
                                 V3 v = hit - pivot;
 
