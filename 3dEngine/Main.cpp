@@ -62,26 +62,41 @@ constexpr std::array<std::pair<int, int>, 12> EDGE{ {
  {0,4},{1,5},{2,6},{3,7}
 } };
 
-/*========== 4. グリッドキー ==========*/
+/*========== 4. クォータニオン ==========*/
+struct Quat { double w, x, y, z; };
+inline Quat qMul(Quat a, Quat b)
+{
+        return { a.w*b.w - a.x*b.x - a.y*b.y - a.z*b.z,
+                 a.w*b.x + a.x*b.w + a.y*b.z - a.z*b.y,
+                 a.w*b.y - a.x*b.z + a.y*b.w + a.z*b.x,
+                 a.w*b.z + a.x*b.y - a.y*b.x + a.z*b.w };
+}
+inline Quat qConj(Quat q) { return { q.w, -q.x, -q.y, -q.z }; }
+inline Quat qNormalize(Quat q)
+{
+        double l = std::sqrt(q.w*q.w + q.x*q.x + q.y*q.y + q.z*q.z);
+        return { q.w / l, q.x / l, q.y / l, q.z / l };
+}
+inline Quat qAxisAngle(V3 axis, double angle)
+{
+        axis = norm(axis); double s = std::sin(angle * 0.5);
+        return { std::cos(angle * 0.5), axis.x*s, axis.y*s, axis.z*s };
+}
+inline V3 qRotate(Quat q, V3 v)
+{
+        Quat p{ 0,v.x,v.y,v.z };
+        Quat r = qMul(qMul(q, p), qConj(q));
+        return { r.x, r.y, r.z };
+}
+
+/*========== 5. グリッドキー ==========*/
 struct GKey { int gx, gz; bool operator==(const GKey&) const = default; };
 struct GHash { size_t operator()(GKey k) const noexcept { return (size_t)k.gx << 32 ^ (size_t)k.gz; } };
 inline int    gIdx(double v) { return (int)std::round(v / (2 * HALF)); }
 inline double gPos(int g) { return g * 2.0 * HALF; }
 
-/*========== 5. Cube データ ==========*/
-struct Cube { V3 c; double rx = 0, ry = 0, rz = 0, s = 1; };
-
-/*========== 6. XYZ 回転 ==========*/
-inline V3 rotXYZ(V3 p, double rx, double ry, double rz)
-{
-	using std::sin; using std::cos;
-	double cx = cos(rx), sx = sin(rx);
-	double cy = cos(ry), sy = sin(ry);
-	double cz = cos(rz), sz = sin(rz);
-	V3 t{ p.x, p.y * cx - p.z * sx, p.y * sx + p.z * cx };
-	V3 u{ t.x * cy + t.z * sy, t.y, -t.x * sy + t.z * cy };
-	return { u.x * cz - u.y * sz, u.x * sz + u.y * cz, u.z };
-}
+/*========== 6. Cube データ ==========*/
+struct Cube { V3 c; Quat q{1,0,0,0}; double s = 1; };
 
 /*========== 7. Ray vs AABB ==========*/
 inline bool hitAABB(V3 o, V3 d, V3 c, double h, double& tOut)
@@ -108,8 +123,8 @@ enum class Handle {
 	ScaleX, ScaleY, ScaleZ, ScaleUniform
 };
 struct Drag {
-	bool  on = false; s3d::Vec2 cur0;
-	V3  p0; double rx0{}, ry0{}, rz0{}, s0{};
+        bool  on = false; s3d::Vec2 cur0;
+        V3  p0; Quat q0{1,0,0,0}; double s0{};
 	double lenPx = 1;
 	/* Rotate 用 */
 	V3     axis{};
@@ -297,10 +312,10 @@ void Main()
 			double minX = 1e9, minY = 1e9;
 			double maxX = -1e9, maxY = -1e9;
 			bool   any = false;
-			for (int k = 0; k < 8; ++k)
-			{
-				P2 p = scr(cb.c + rotXYZ(LOCAL[k] * cb.s, cb.rx, cb.ry, cb.rz));
-				if (std::isinf(p.x)) continue;     // 画面外
+                        for (int k = 0; k < 8; ++k)
+                        {
+                                P2 p = scr(cb.c + qRotate(cb.q, LOCAL[k] * cb.s));
+                                if (std::isinf(p.x)) continue;     // 画面外
 				any = true;
 				minX = std::min(minX, p.x);  maxX = std::max(maxX, p.x);
 				minY = std::min(minY, p.y);  maxY = std::max(maxY, p.y);
@@ -418,10 +433,10 @@ void Main()
 				drag.on = true;
 				drag.cur0 = cur;
 
-				Cube& cb = cubes[sel];
-				drag.p0 = cb.c;
-				drag.rx0 = cb.rx; drag.ry0 = cb.ry; drag.rz0 = cb.rz;
-				drag.s0 = cb.s;
+                                Cube& cb = cubes[sel];
+                                drag.p0 = cb.c;
+                                drag.q0 = cb.q;
+                                drag.s0 = cb.s;
 
 				/* grid から抜く (X / Z 移動時) */
 				if (activeHd == Handle::MoveX || activeHd == Handle::MoveZ)
@@ -489,9 +504,8 @@ void Main()
 					double delta = *ang - drag.ang0;
 					if (delta > s3d::Math::Pi)      delta -= s3d::Math::TwoPi;
 					if (delta < -s3d::Math::Pi)      delta += s3d::Math::TwoPi;
-					if (activeHd == Handle::RotateX) cb.rx = drag.rx0 + delta;
-					else if (activeHd == Handle::RotateY) cb.ry = drag.ry0 + delta;
-					else cb.rz = drag.rz0 + delta;
+                                        Quat dq = qAxisAngle(drag.axis, delta);
+                                        cb.q = qNormalize(qMul(dq, drag.q0));
 					}
 				 }
 			/* Scale */
@@ -555,11 +569,11 @@ void Main()
 			double th = ((int)i == sel) ? 3 : 1;
 
 			std::array<P2, 8> v;
-			for (int k = 0; k < 8; ++k)
-			{
-				V3 p = LOCAL[k] * cb.s;
-				v[k] = scr(cb.c + rotXYZ(p, cb.rx, cb.ry, cb.rz));
-			}
+                        for (int k = 0; k < 8; ++k)
+                        {
+                                V3 p = LOCAL[k] * cb.s;
+                                v[k] = scr(cb.c + qRotate(cb.q, p));
+                        }
 			for (auto [a, b] : EDGE)
 				if (!std::isinf(v[a].x) && !std::isinf(v[b].x))
 					Line{ v[a].x,v[a].y, v[b].x,v[b].y }.draw(th, col);
