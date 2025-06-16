@@ -1,4 +1,4 @@
-﻿/*-------------------------------------------------
+/*-------------------------------------------------
   Siv3D v0.6.16
   FreeCam + FPS + Move / Rotate / Scale Gizmo
   Backspace : FreeCam   /   Enter : FPS
