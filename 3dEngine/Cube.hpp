@@ -1,0 +1,33 @@
+#pragma once
+#include <array>
+#include <unordered_set>
+#include <cmath>
+#include "Math.hpp"
+
+constexpr std::array<V3, 8> LOCAL{ {
+    {-HALF,-HALF,-HALF},{ HALF,-HALF,-HALF},
+    { HALF, HALF,-HALF},{-HALF, HALF,-HALF},
+    {-HALF,-HALF, HALF},{ HALF,-HALF, HALF},
+    { HALF, HALF, HALF},{-HALF, HALF, HALF}
+} };
+constexpr std::array<std::pair<int, int>, 12> EDGE{ {
+    {0,1},{1,2},{2,3},{3,0},
+    {4,5},{5,6},{6,7},{7,4},
+    {0,4},{1,5},{2,6},{3,7}
+} };
+
+struct GKey {
+    int gx, gz;
+    bool operator==(const GKey&) const = default;
+};
+struct GHash {
+    size_t operator()(GKey k) const noexcept { return (size_t)k.gx << 32 ^ (size_t)k.gz; }
+};
+inline int    gIdx(double v) { return (int)std::round(v / (2 * HALF)); }
+inline double gPos(int g) { return g * 2.0 * HALF; }
+
+struct Cube {
+    V3 c;
+    Quat q{1,0,0,0};
+    double s = 1;
+};
