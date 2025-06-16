@@ -157,13 +157,17 @@ void Main()
                                         return ang;
                                 }
 
-                                double denom = dot(rd, ax);
+                                // カメラと軸の両方に垂直な平面
+                                V3 n = norm(cross(ax, F));
+                                if (len(n) < 1e-6) return std::nullopt;
+
+                                double denom = dot(rd, n);
                                 V3 hit;
 
-                                // 1) 軸平面との交点
+                                // 1) 交点を求める
                                 if (std::abs(denom) > 1e-4)
                                 {
-                                        double t = dot(ax, pivot - cam) / denom;
+                                        double t = dot(n, pivot - cam) / denom;
                                         if (t <= 0) return std::nullopt;
                                         hit = cam + rd * t;
                                 }
@@ -179,10 +183,9 @@ void Main()
 
                                 V3 v = hit - pivot;
 
-                                // 軸と垂直な 2 本の基底ベクトルを作る
-                                V3 ref = (std::abs(ax.x) < 0.9) ? V3{ 1,0,0 } : V3{ 0,1,0 };
-                                V3 p1 = norm(cross(ax, ref));
-                                V3 p2 = cross(ax, p1);
+                                // 軸とカメラに基づく基底ベクトル
+                                V3 p1 = norm(cross(ax, n));
+                                V3 p2 = n;
 
                                 return std::atan2(dot(v, p2), dot(v, p1));
                         };
