@@ -29,5 +29,5 @@ inline double gPos(int g) { return g * 2.0 * HALF; }
 struct Cube {
     V3 c;
     Quat q{1,0,0,0};
-    double s = 1;
+    V3 s{ 1,1,1 };
 };

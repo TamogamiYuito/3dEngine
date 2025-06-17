@@ -193,8 +193,7 @@ void Main()
 		if (free && sel != -1 && !KeyAlt.pressed())
 		{
 			const Cube& cb = cubes[sel];
-			const double L = HALF * cb.s * 1.5;
-			P2 ctr = scr(cb.c);
+                        P2 ctr = scr(cb.c);
 
 			/* Move / Scale 軸 */
 			if (!std::isinf(ctr.x) &&
@@ -206,12 +205,15 @@ void Main()
 					{ {0,1,0}, Palette::Green, Handle::MoveY, Handle::ScaleY },
 					{ {0,0,1}, Palette::Blue,  Handle::MoveZ, Handle::ScaleZ }
 				};
-				double bestA = 1e9;
-				for (const auto& a : AX)
-				{
-					P2 tip = scr(cb.c + a.d * L); if (std::isinf(tip.x)) continue;
-					double dLine = segDist2(cur, { ctr.x,ctr.y }, { tip.x,tip.y });
-					double dTip = (cur - Vec2{ tip.x,tip.y }).lengthSq();
+                                double bestA = 1e9;
+                                for (const auto& a : AX)
+                                {
+                                        V3 dir = (mode == Mode::Scale) ? qRotate(cb.q, a.d) : a.d;
+                                        double sc = (a.d.x != 0) ? cb.s.x : (a.d.y != 0) ? cb.s.y : cb.s.z;
+                                        P2 tip = scr(cb.c + dir * (HALF * 1.5 * sc));
+                                        if (std::isinf(tip.x)) continue;
+                                        double dLine = segDist2(cur, { ctr.x,ctr.y }, { tip.x,tip.y });
+                                        double dTip = (cur - Vec2{ tip.x,tip.y }).lengthSq();
 
 					if (mode == Mode::Move && dLine < 64 && dLine < bestA)
 					{
@@ -323,16 +325,19 @@ void Main()
 				if (activeHd == Handle::MoveX || activeHd == Handle::MoveZ)
 					grid.erase({ gIdx(cb.c.x), gIdx(cb.c.z) });
 
-				if (activeHd == Handle::MoveX || activeHd == Handle::MoveY
-				 || activeHd == Handle::MoveZ)
-				{
-					V3 ax = (activeHd == Handle::MoveX) ? V3{ 1,0,0 } :
-						(activeHd == Handle::MoveY) ? V3{ 0,1,0 } :
-						V3{ 0,0,1 };
-					P2 p0 = scr(cb.c), p1 = scr(cb.c + ax);
-					drag.lenPx = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).length();
-					if (drag.lenPx < 1) drag.lenPx = 1;
-				}
+                                if (activeHd == Handle::MoveX || activeHd == Handle::MoveY
+                                 || activeHd == Handle::MoveZ || activeHd == Handle::ScaleX
+                                 || activeHd == Handle::ScaleY || activeHd == Handle::ScaleZ)
+                                {
+                                        V3 axLocal = (activeHd == Handle::MoveX || activeHd == Handle::ScaleX) ? V3{ 1,0,0 } :
+                                                     (activeHd == Handle::MoveY || activeHd == Handle::ScaleY) ? V3{ 0,1,0 } :
+                                                     V3{ 0,0,1 };
+                                        V3 ax = (activeHd == Handle::ScaleX || activeHd == Handle::ScaleY || activeHd == Handle::ScaleZ)
+                                                ? qRotate(cb.q, axLocal) : axLocal;
+                                        P2 p0 = scr(cb.c), p1 = scr(cb.c + ax);
+                                        drag.lenPx = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).length();
+                                        if (drag.lenPx < 1) drag.lenPx = 1;
+                                }
 				/* 回転：軸ベクトルと開始角を保存 */
                                 if (activeHd == Handle::RotateX || activeHd == Handle::RotateY
                                 || activeHd == Handle::RotateZ)
@@ -365,21 +370,21 @@ void Main()
 			Vec2 d = cur - drag.cur0;
 			Cube& cb = cubes[sel];
 
-			/* Move */
-			if (activeHd == Handle::MoveX || activeHd == Handle::MoveY
-			 || activeHd == Handle::MoveZ)
-			{
-				V3 ax = (activeHd == Handle::MoveX) ? V3{ 1,0,0 } :
-					(activeHd == Handle::MoveY) ? V3{ 0,1,0 } : V3{ 0,0,1 };
-				P2 p0 = scr(drag.p0), p1 = scr(drag.p0 + ax);
-				Vec2 dir = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).normalized();
-				double pix = Dot(d, dir);
-				double world = (pix / drag.lenPx) * 40.0;   // 1px = 40 world
-				cb.c = drag.p0 + ax * world;
-			}
-			/* Rotate：カーソル角度差分で回転 */
-			 else if (activeHd == Handle::RotateX || activeHd == Handle::RotateY
-			 || activeHd == Handle::RotateZ)
+                        /* Move */
+                        if (activeHd == Handle::MoveX || activeHd == Handle::MoveY
+                         || activeHd == Handle::MoveZ)
+                        {
+                                V3 ax = (activeHd == Handle::MoveX) ? V3{ 1,0,0 } :
+                                        (activeHd == Handle::MoveY) ? V3{ 0,1,0 } : V3{ 0,0,1 };
+                                P2 p0 = scr(drag.p0), p1 = scr(drag.p0 + ax);
+                                Vec2 dir = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).normalized();
+                                double pix = Dot(d, dir);
+                                double world = (pix / drag.lenPx) * 40.0;   // 1px = 40 world
+                                cb.c = drag.p0 + ax * world;
+                        }
+                        /* Rotate：カーソル角度差分で回転 */
+                         else if (activeHd == Handle::RotateX || activeHd == Handle::RotateY
+                         || activeHd == Handle::RotateZ)
 				 {
 				if (auto ang = cursorAngle(cur, drag.axis, cb.c))
 					 {
@@ -390,12 +395,32 @@ void Main()
                                         cb.q = qNormalize(qMul(dq, drag.q0));
 					}
 				 }
-			/* Scale */
-			else
-			{
-				cb.s = Clamp(drag.s0 * (1.0 + d.x * 0.002), 0.1, 5.0);
-			}
-		}
+                        /* Scale */
+                        else if (activeHd == Handle::ScaleX || activeHd == Handle::ScaleY || activeHd == Handle::ScaleZ)
+                        {
+                                V3 axLocal = (activeHd == Handle::ScaleX) ? V3{1,0,0}
+                                                : (activeHd == Handle::ScaleY) ? V3{0,1,0}
+                                                : V3{0,0,1};
+                                V3 ax = qRotate(cb.q, axLocal);
+                                P2 p0 = scr(drag.p0), p1 = scr(drag.p0 + ax);
+                                Vec2 dir = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).normalized();
+                                double pix = Dot(d, dir);
+                                double f = 1.0 + pix * 0.002;
+                                V3 s = drag.s0;
+                                if (activeHd == Handle::ScaleX) s.x = Clamp(s.x * f, 0.1, 5.0);
+                                else if (activeHd == Handle::ScaleY) s.y = Clamp(s.y * f, 0.1, 5.0);
+                                else s.z = Clamp(s.z * f, 0.1, 5.0);
+                                cb.s = s;
+                        }
+                        else /* ScaleUniform */
+                        {
+                                V3 f = drag.s0 * (1.0 + d.x * 0.002);
+                                f.x = Clamp(f.x, 0.1, 5.0);
+                                f.y = Clamp(f.y, 0.1, 5.0);
+                                f.z = Clamp(f.z, 0.1, 5.0);
+                                cb.s = f;
+                        }
+                }
 
 		/*--- FPS 移動 (簡略) ---*/
 		if (!free)
@@ -406,17 +431,19 @@ void Main()
 			if (KeyA.pressed()) pos = pos - MOVE * dt * Rv;
 
 			bool onGround = false; double foot = pos.y - EYE, head = foot + CAP_H;
-			for (const auto& cb : cubes)
-			{
-				double h = HALF * cb.s;
+                        for (const auto& cb : cubes)
+                        {
+                                double hx = HALF * cb.s.x;
+                                double hy = HALF * cb.s.y;
+                                double hz = HALF * cb.s.z;
 				/* 着地：下降中 ＋ ±LAND_EPS 以内 */
 				double dynamicEps = Max(2.0, (-vy) * dt + 0.5); // 最低 2px、速いほど広げる
-				if (vy <= 0 &&
-					foot >= cb.c.y + h - dynamicEps &&
-					foot <= cb.c.y + h + dynamicEps)
-				{
-					double dx = std::max(std::abs(pos.x - cb.c.x) - h, 0.0);
-					double dz = std::max(std::abs(pos.z - cb.c.z) - h, 0.0);
+                                if (vy <= 0 &&
+                                        foot >= cb.c.y + hy - dynamicEps &&
+                                        foot <= cb.c.y + hy + dynamicEps)
+                                {
+                                        double dx = std::max(std::abs(pos.x - cb.c.x) - hx, 0.0);
+                                        double dz = std::max(std::abs(pos.z - cb.c.z) - hz, 0.0);
 					if (dx * dx + dz * dz <= R * R)
 					{
 						pos.y = cb.c.y + h + EYE; vy = 0; onGround = true;
@@ -424,9 +451,9 @@ void Main()
 					}
 				}
 				/* 横衝突 */
-				if (head <= cb.c.y - h || foot >= cb.c.y + h) continue;
-				double cx = std::clamp(pos.x, cb.c.x - h, cb.c.x + h);
-				double cz = std::clamp(pos.z, cb.c.z - h, cb.c.z + h);
+                                if (head <= cb.c.y - hy || foot >= cb.c.y + hy) continue;
+                                double cx = std::clamp(pos.x, cb.c.x - hx, cb.c.x + hx);
+                                double cz = std::clamp(pos.z, cb.c.z - hz, cb.c.z + hz);
 				double dx = pos.x - cx, dz = pos.z - cz, d2 = dx * dx + dz * dz;
 				if (d2 < R * R - 1e-6)
 				{
@@ -465,8 +492,7 @@ void Main()
 		if (free && sel != -1)
 		{
 			const Cube& cb = cubes[sel];
-			const double L = HALF * cb.s * 1.5;
-			P2 ctr = scr(cb.c); if (std::isinf(ctr.x)) continue;
+                        P2 ctr = scr(cb.c); if (std::isinf(ctr.x)) continue;
 
 			/* Move / Scale */
 			if (mode == Mode::Move || mode == Mode::Scale)
@@ -477,9 +503,11 @@ void Main()
 					{ {0,1,0}, Palette::Green, Handle::MoveY, Handle::ScaleY },
 					{ {0,0,1}, Palette::Blue,  Handle::MoveZ, Handle::ScaleZ }
 				};
-				for (const auto& a : AX)
-				{
-					P2 tip = scr(cb.c + a.d * L); if (std::isinf(tip.x)) continue;
+                                for (const auto& a : AX)
+                                {
+                                        V3 dir = (mode == Mode::Scale) ? qRotate(cb.q, a.d) : a.d;
+                                        double sc = (a.d.x != 0) ? cb.s.x : (a.d.y != 0) ? cb.s.y : cb.s.z;
+                                        P2 tip = scr(cb.c + dir * (HALF * 1.5 * sc)); if (std::isinf(tip.x)) continue;
 					bool hot = (hoverHd == a.mv || hoverHd == a.sc
 							 || activeHd == a.mv || activeHd == a.sc);
 

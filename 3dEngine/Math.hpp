@@ -11,6 +11,7 @@ inline V3 operator+(V3 a, V3 b) { return { a.x + b.x, a.y + b.y, a.z + b.z }; }
 inline V3 operator-(V3 a, V3 b) { return { a.x - b.x, a.y - b.y, a.z - b.z }; }
 inline V3 operator*(double s, V3 v) { return { s * v.x, s * v.y, s * v.z }; }
 inline V3 operator*(V3 v, double s) { return s * v; }
+inline V3 operator*(V3 a, V3 b) { return { a.x * b.x, a.y * b.y, a.z * b.z }; }
 inline V3 operator/(V3 v, double s) { return { v.x / s, v.y / s, v.z / s }; }
 inline double  dot(V3 a, V3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 inline V3      cross(V3 a, V3 b) {
