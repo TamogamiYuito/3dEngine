@@ -14,6 +14,104 @@
 # include "RenderUtils.hpp"
 
 
+/*-------------------------------------------------
+   Utility Functions
+-------------------------------------------------*/
+
+static int detectHoveredCube(const std::vector<Cube>& cubes,
+                             V3 cam, V3 Rv, V3 U, V3 F,
+                             const s3d::Vec2& cur,
+                             double cx, double cy)
+{
+        auto scr = [&](V3 w)
+        {
+                return screenProject(w, cam, Rv, U, F, cx, cy);
+        };
+
+        int hoverIdx = -1; double bestDepth = 1e9;
+        for (size_t i = 0; i < cubes.size(); ++i)
+        {
+                const Cube& cb = cubes[i];
+
+                double minX = 1e9, minY = 1e9;
+                double maxX = -1e9, maxY = -1e9;
+                bool   any = false;
+                for (int k = 0; k < 8; ++k)
+                {
+                        P2 p = scr(cb.c + qRotate(cb.q, LOCAL[k] * cb.s));
+                        if (std::isinf(p.x)) continue;
+                        any = true;
+                        minX = std::min(minX, p.x);  maxX = std::max(maxX, p.x);
+                        minY = std::min(minY, p.y);  maxY = std::max(maxY, p.y);
+                }
+                if (!any) continue;
+
+                if (cur.x >= minX && cur.x <= maxX && cur.y >= minY && cur.y <= maxY)
+                {
+                        double depth = len(cb.c - cam);
+                        if (depth < bestDepth)
+                        {
+                                bestDepth = depth;
+                                hoverIdx = static_cast<int>(i);
+                        }
+                }
+        }
+        return hoverIdx;
+}
+
+static void handleFPSMovement(Camera& camera, const std::vector<Cube>& cubes, double dt)
+{
+        using namespace s3d;
+
+        V3 F  = camera.forward();
+        V3 Rv = camera.right();
+        V3 Fh = camera.forwardH();
+        V3& pos = camera.pos;
+        V3& cam = camera.cam;
+        double& vy = camera.vy;
+
+        if (KeyW.pressed()) pos = pos - MOVE * dt * Fh;
+        if (KeyS.pressed()) pos = pos + MOVE * dt * Fh;
+        if (KeyD.pressed()) pos = pos + MOVE * dt * Rv;
+        if (KeyA.pressed()) pos = pos - MOVE * dt * Rv;
+
+        bool onGround = false; double foot = pos.y - EYE, head = foot + CAP_H;
+        for (const auto& cb : cubes)
+        {
+                double hx = HALF * cb.s.x;
+                double hy = HALF * cb.s.y;
+                double hz = HALF * cb.s.z;
+
+                double dynamicEps = Max(2.0, (-vy) * dt + 0.5);
+                if (vy <= 0 &&
+                        foot >= cb.c.y + hy - dynamicEps &&
+                        foot <= cb.c.y + hy + dynamicEps)
+                {
+                        double dx = std::max(std::abs(pos.x - cb.c.x) - hx, 0.0);
+                        double dz = std::max(std::abs(pos.z - cb.c.z) - hz, 0.0);
+                        if (dx * dx + dz * dz <= R * R)
+                        {
+                                pos.y = cb.c.y + hy + EYE; vy = 0; onGround = true;
+                                foot = pos.y - EYE; head = foot + CAP_H;
+                        }
+                }
+
+                if (head <= cb.c.y - hy || foot >= cb.c.y + hy) continue;
+                double cx = std::clamp(pos.x, cb.c.x - hx, cb.c.x + hx);
+                double cz = std::clamp(pos.z, cb.c.z - hz, cb.c.z + hz);
+                double dx = pos.x - cx, dz = pos.z - cz, d2 = dx * dx + dz * dz;
+                if (d2 < R * R - 1e-6)
+                {
+                        double d = std::sqrt(std::max(d2, 1e-6));
+                        V3 push{ dx,0,dz }; push = ((R - d) / d) * push; pos = pos + push;
+                }
+        }
+
+        if (KeySpace.down() && onGround) vy = JUMP; else vy -= GRAV * dt;
+        pos.y += vy * dt; cam = pos + V3{ 0,EYE,0 };
+}
+
+
 /*=================================================
    Main
 =================================================*/
@@ -95,38 +193,8 @@ void Main()
                         };
 
 
-		/*--- Hover キューブ（スクリーン AABB 判定） ---*/
-		hoverIdx = -1; double bestDepth = 1e9;
-		for (size_t i = 0; i < cubes.size(); ++i)
-		{
-			const Cube& cb = cubes[i];
-
-			/* 8 頂点をスクリーンへ投影しバウンディング矩形を作成 */
-			double minX = 1e9, minY = 1e9;
-			double maxX = -1e9, maxY = -1e9;
-			bool   any = false;
-                        for (int k = 0; k < 8; ++k)
-                        {
-                                P2 p = scr(cb.c + qRotate(cb.q, LOCAL[k] * cb.s));
-                                if (std::isinf(p.x)) continue;     // 画面外
-				any = true;
-				minX = std::min(minX, p.x);  maxX = std::max(maxX, p.x);
-				minY = std::min(minY, p.y);  maxY = std::max(maxY, p.y);
-			}
-			if (!any) continue;
-
-			/* カーソルが矩形内なら Hover 候補 */
-			if (cur.x >= minX && cur.x <= maxX && cur.y >= minY && cur.y <= maxY)
-			{
-				/* 奥行きが浅いもの（画面手前）を優先 */
-				double depth = len(cb.c - cam);
-				if (depth < bestDepth)
-				{
-					bestDepth = depth;
-					hoverIdx = static_cast<int>(i);
-				}
-			}
-		}
+                /*--- Hover キューブ（スクリーン AABB 判定） ---*/
+                hoverIdx = detectHoveredCube(cubes, cam, Rv, U, F, cur, WINF.x, WINF.y);
 
 		/*--- Hover ギズモ ---*/
 		hoverHd = Handle::None;
@@ -363,48 +431,11 @@ void Main()
                         }
                 }
 
-		/*--- FPS 移動 (簡略) ---*/
-		if (!free)
-		{
-			if (KeyW.pressed()) pos = pos - MOVE * dt * Fh;
-			if (KeyS.pressed()) pos = pos + MOVE * dt * Fh;
-			if (KeyD.pressed()) pos = pos + MOVE * dt * Rv;
-			if (KeyA.pressed()) pos = pos - MOVE * dt * Rv;
-
-			bool onGround = false; double foot = pos.y - EYE, head = foot + CAP_H;
-                        for (const auto& cb : cubes)
-                        {
-                                double hx = HALF * cb.s.x;
-                                double hy = HALF * cb.s.y;
-                                double hz = HALF * cb.s.z;
-				/* 着地：下降中 ＋ ±LAND_EPS 以内 */
-				double dynamicEps = Max(2.0, (-vy) * dt + 0.5); // 最低 2px、速いほど広げる
-                                if (vy <= 0 &&
-                                        foot >= cb.c.y + hy - dynamicEps &&
-                                        foot <= cb.c.y + hy + dynamicEps)
-                                {
-                                        double dx = std::max(std::abs(pos.x - cb.c.x) - hx, 0.0);
-                                        double dz = std::max(std::abs(pos.z - cb.c.z) - hz, 0.0);
-					if (dx * dx + dz * dz <= R * R)
-					{
-                                                pos.y = cb.c.y + hy + EYE; vy = 0; onGround = true;
-						foot = pos.y - EYE; head = foot + CAP_H;
-					}
-				}
-				/* 横衝突 */
-                                if (head <= cb.c.y - hy || foot >= cb.c.y + hy) continue;
-                                double cx = std::clamp(pos.x, cb.c.x - hx, cb.c.x + hx);
-                                double cz = std::clamp(pos.z, cb.c.z - hz, cb.c.z + hz);
-				double dx = pos.x - cx, dz = pos.z - cz, d2 = dx * dx + dz * dz;
-				if (d2 < R * R - 1e-6)
-				{
-					double d = std::sqrt(std::max(d2, 1e-6));
-					V3 push{ dx,0,dz }; push = ((R - d) / d) * push; pos = pos + push;
-				}
-			}
-			if (KeySpace.down() && onGround) vy = JUMP; else vy -= GRAV * dt;
-			pos.y += vy * dt; cam = pos + V3{ 0,EYE,0 };
-		}
+                /*--- FPS 移動 (簡略) ---*/
+                if (!free)
+                {
+                        handleFPSMovement(camera, cubes, dt);
+                }
 
 		/*================= 描画 =================*/
 		Scene::SetBackground(ColorF{ 0.92,0.95,1 });
