@@ -176,8 +176,8 @@ void Main()
                         // Random yaw within ±45 degrees
                         double ang = s3d::Random(-s3d::Math::Pi / 4.0, s3d::Math::Pi / 4.0);
 
-                        // Spawn direction (in front of the player)
-                        V3 dir = norm(std::cos(ang) * (-Fh) + std::sin(ang) * Rv);
+                        // Spawn direction (in front of the playe1r)
+                        V3 dir = norm(std::cos(ang) * (-1*Fh) + std::sin(ang) * Rv);
 
                         // Random distance between 2 and 4 cubes
                         double dist = s3d::Random(2.0, 4.0) * (2.0 * HALF);
