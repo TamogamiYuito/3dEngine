@@ -279,45 +279,35 @@ void Main()
 			}
 
 			/* Rotate リング */
-			if (mode == Mode::Rotate && !std::isinf(ctr.x))
-			{
-				struct Ring { Handle hd; Color col; };
-				const Ring RG[3] = {
-					{ Handle::RotateX, Palette::Red   },
-					{ Handle::RotateY, Palette::Green },
-					{ Handle::RotateZ, Palette::Blue  }
-				};
-				constexpr int SEG = 64;
-				for (auto r : RG)
-				{
-					double bestR = 1e9;
-					for (int k = 0; k < SEG; ++k)
-					{
-						double a0 = Math::TwoPi * k / SEG,
-							a1 = Math::TwoPi * (k + 1) / SEG;
-						V3 p0, p1;
-						if (r.hd == Handle::RotateX)
-						{
-							p0 = { 0,std::sin(a0) * L,std::cos(a0) * L };
-							p1 = { 0,std::sin(a1) * L,std::cos(a1) * L };
-						}
-						else if (r.hd == Handle::RotateY)
-						{
-							p0 = { std::sin(a0) * L,0,std::cos(a0) * L };
-							p1 = { std::sin(a1) * L,0,std::cos(a1) * L };
-						}
-						else
-						{
-							p0 = { std::sin(a0) * L,std::cos(a0) * L,0 };
-							p1 = { std::sin(a1) * L,std::cos(a1) * L,0 };
-						}
-						P2 s0 = scr(cb.c + p0), s1 = scr(cb.c + p1);
-						if (std::isinf(s0.x) || std::isinf(s1.x)) continue;
-						bestR = std::min(bestR,
-										 segDist2(cur, { s0.x,s0.y }, { s1.x,s1.y }));
-					}
-					if (bestR < 64) { hoverHd = r.hd; break; }
-				}
+                        if (mode == Mode::Rotate && !std::isinf(ctr.x))
+                        {
+                                struct Ring { Handle hd; V3 axis; Color col; };
+                                const Ring RG[3] = {
+                                        { Handle::RotateX, {1,0,0}, Palette::Red   },
+                                        { Handle::RotateY, {0,1,0}, Palette::Green },
+                                        { Handle::RotateZ, {0,0,1}, Palette::Blue  }
+                                };
+                                constexpr double THICK = 20.0; // クリック許容範囲
+                                double bestR = 1e9;
+                                Handle bestHd = Handle::None;
+
+                                for (auto r : RG)
+                                {
+                                        P2 tip = scr(cb.c + r.axis * L);
+                                        if (std::isinf(tip.x)) continue;
+                                        double radius = (Vec2{ tip.x,tip.y } - Vec2{ ctr.x,ctr.y }).length();
+                                        double dist   = (cur - Vec2{ ctr.x,ctr.y }).length();
+                                        double diff   = std::abs(dist - radius);
+                                        if (diff < bestR)
+                                        {
+                                                bestR = diff;
+                                                bestHd = r.hd;
+                                        }
+                                }
+
+                                if (bestR < THICK)
+                                        hoverHd = bestHd;
+                        }
 			}
 		}
 
