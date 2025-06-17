@@ -190,9 +190,10 @@ void Main()
 
 		/*--- Hover ギズモ ---*/
 		hoverHd = Handle::None;
-		if (free && sel != -1 && !KeyAlt.pressed())
-		{
-			const Cube& cb = cubes[sel];
+                if (free && sel != -1 && !KeyAlt.pressed())
+                {
+                        const Cube& cb = cubes[sel];
+                        const double L = HALF * std::max({ cb.s.x, cb.s.y, cb.s.z }) * 1.5;
                         P2 ctr = scr(cb.c);
 
 			/* Move / Scale 軸 */
@@ -489,9 +490,10 @@ void Main()
 		}
 
 		/*--- ギズモ ---*/
-		if (free && sel != -1)
-		{
-			const Cube& cb = cubes[sel];
+                if (free && sel != -1)
+                {
+                        const Cube& cb = cubes[sel];
+                        const double L = HALF * std::max({ cb.s.x, cb.s.y, cb.s.z }) * 1.5;
                         P2 ctr = scr(cb.c); if (std::isinf(ctr.x)) continue;
 
 			/* Move / Scale */
