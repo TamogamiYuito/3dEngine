@@ -1,4 +1,4 @@
-/*-------------------------------------------------
+﻿/*-------------------------------------------------
   Siv3D v0.6.16
   FreeCam + FPS + Move / Rotate / Scale Gizmo
   Backspace : FreeCam   /   Enter : FPS
@@ -10,6 +10,106 @@
 # include "Math.hpp"
 # include "Cube.hpp"
 # include "Gizmo.hpp"
+# include "Camera.hpp"
+# include "RenderUtils.hpp"
+
+
+/*-------------------------------------------------
+   Utility Functions
+-------------------------------------------------*/
+
+static int detectHoveredCube(const std::vector<Cube>& cubes,
+                             V3 cam, V3 Rv, V3 U, V3 F,
+                             const s3d::Vec2& cur,
+                             double cx, double cy)
+{
+        auto scr = [&](V3 w)
+        {
+                return screenProject(w, cam, Rv, U, F, cx, cy);
+        };
+
+        int hoverIdx = -1; double bestDepth = 1e9;
+        for (size_t i = 0; i < cubes.size(); ++i)
+        {
+                const Cube& cb = cubes[i];
+
+                double minX = 1e9, minY = 1e9;
+                double maxX = -1e9, maxY = -1e9;
+                bool   any = false;
+                for (int k = 0; k < 8; ++k)
+                {
+                        P2 p = scr(cb.c + qRotate(cb.q, LOCAL[k] * cb.s));
+                        if (std::isinf(p.x)) continue;
+                        any = true;
+                        minX = std::min(minX, p.x);  maxX = std::max(maxX, p.x);
+                        minY = std::min(minY, p.y);  maxY = std::max(maxY, p.y);
+                }
+                if (!any) continue;
+
+                if (cur.x >= minX && cur.x <= maxX && cur.y >= minY && cur.y <= maxY)
+                {
+                        double depth = len(cb.c - cam);
+                        if (depth < bestDepth)
+                        {
+                                bestDepth = depth;
+                                hoverIdx = static_cast<int>(i);
+                        }
+                }
+        }
+        return hoverIdx;
+}
+
+static void handleFPSMovement(Camera& camera, const std::vector<Cube>& cubes, double dt)
+{
+        using namespace s3d;
+
+        V3 F  = camera.forward();
+        V3 Rv = camera.right();
+        V3 Fh = camera.forwardH();
+        V3& pos = camera.pos;
+        V3& cam = camera.cam;
+        double& vy = camera.vy;
+
+        if (KeyW.pressed()) pos = pos - MOVE * dt * Fh;
+        if (KeyS.pressed()) pos = pos + MOVE * dt * Fh;
+        if (KeyD.pressed()) pos = pos + MOVE * dt * Rv;
+        if (KeyA.pressed()) pos = pos - MOVE * dt * Rv;
+
+        bool onGround = false; double foot = pos.y - EYE, head = foot + CAP_H;
+        for (const auto& cb : cubes)
+        {
+                double hx = HALF * cb.s.x;
+                double hy = HALF * cb.s.y;
+                double hz = HALF * cb.s.z;
+
+                double dynamicEps = Max(2.0, (-vy) * dt + 0.5);
+                if (vy <= 0 &&
+                        foot >= cb.c.y + hy - dynamicEps &&
+                        foot <= cb.c.y + hy + dynamicEps)
+                {
+                        double dx = std::max(std::abs(pos.x - cb.c.x) - hx, 0.0);
+                        double dz = std::max(std::abs(pos.z - cb.c.z) - hz, 0.0);
+                        if (dx * dx + dz * dz <= R * R)
+                        {
+                                pos.y = cb.c.y + hy + EYE; vy = 0; onGround = true;
+                                foot = pos.y - EYE; head = foot + CAP_H;
+                        }
+                }
+
+                if (head <= cb.c.y - hy || foot >= cb.c.y + hy) continue;
+                double cx = std::clamp(pos.x, cb.c.x - hx, cb.c.x + hx);
+                double cz = std::clamp(pos.z, cb.c.z - hz, cb.c.z + hz);
+                double dx = pos.x - cx, dz = pos.z - cz, d2 = dx * dx + dz * dz;
+                if (d2 < R * R - 1e-6)
+                {
+                        double d = std::sqrt(std::max(d2, 1e-6));
+                        V3 push{ dx,0,dz }; push = ((R - d) / d) * push; pos = pos + push;
+                }
+        }
+
+        if (KeySpace.down() && onGround) vy = JUMP; else vy -= GRAV * dt;
+        pos.y += vy * dt; cam = pos + V3{ 0,EYE,0 };
+}
 
 
 /*=================================================
@@ -32,9 +132,8 @@ void Main()
 			grid.insert({ x,z });
 		}
 
-	/*--- カメラ & プレイヤー ---*/
-	V3 pos{ 0,HALF + EYE,-200 }, cam = pos;
-	double yaw = 0, pitch = 0, vy = 0; bool free = true;
+        /*--- カメラ & プレイヤー ---*/
+        Camera camera;
 
 	/*--- 編集状態 ---*/
 	Mode   mode = Mode::Move;
@@ -48,58 +147,16 @@ void Main()
 		const double dt = Scene::DeltaTime();
 		const Vec2 cur = Cursor::PosF();
 
-		/*--- 視点モード切替 ---*/
-		if (KeyBackspace.down()) free = true;
-		if (KeyEnter.down()) { free = false; Cursor::SetPos(WINP); }
+                camera.update(dt, WINF, WINP);
 
-		/*--- 視点回転 ---*/
-		Cursor::RequestStyle(free ? CursorStyle::Default
-								 : CursorStyle::Hidden);
-		if (free && MouseR.pressed())
-		{
-			Vec2 d = Cursor::DeltaF();
-			yaw -= d.x * RC_SENS;
-			pitch += d.y * RC_SENS;
-		}
-		else if (!free)
-		{
-			Vec2 d = Cursor::PosF() - WINF;
-			yaw -= d.x * MS_SENS;
-			pitch += d.y * MS_SENS;
-			Cursor::SetPos(WINP);
-		}
-		pitch = Clamp(pitch, -PITCH_LIM, PITCH_LIM);
-
-		/*--- カメラ基底ベクトル ---*/
-		V3 F = norm({ std::cos(pitch) * std::sin(yaw),
-					  std::sin(pitch),
-					 -std::cos(pitch) * std::cos(yaw) });
-		V3 Rv = norm({ -F.z,0,F.x });
-		V3 U = norm(cross(Rv, F));
-		V3 Fh = norm(V3{ F.x,0,F.z }.x == 0 && V3{ F.x,0,F.z }.z == 0
-					 ? V3{ 0,0,1 } : V3{ F.x,0,F.z });
-		cam = free ? pos : pos + V3{ 0,EYE,0 };
-
-		/*--- FreeCam 平行移動 ---*/
-		if (free)
-		{
-			if (MouseR.pressed())
-			{
-				if (KeyW.pressed()) cam = cam - MOVE * dt * Fh;
-				if (KeyS.pressed()) cam = cam + MOVE * dt * Fh;
-				if (KeyD.pressed()) cam = cam + MOVE * dt * Rv;
-				if (KeyA.pressed()) cam = cam - MOVE * dt * Rv;
-				if (KeyQ.pressed()) cam.y += MOVE * dt;
-				if (KeyE.pressed()) cam.y -= MOVE * dt;
-			}
-			if (MouseM.pressed() || (KeyAlt.pressed() && MouseL.pressed()))
-			{
-				Vec2 d = Cursor::DeltaF();
-				cam = cam - (d.x * Rv - d.y * U) * (PAN_SPD * dt / 8);
-			}
-			if (double w = Mouse::Wheel(); w != 0.0) cam = cam - F * w * DOLLY_SPD * dt;
-			pos = cam;
-		}
+                V3 F  = camera.forward();
+                V3 Rv = camera.right();
+                V3 U  = camera.up();
+                V3 Fh = camera.forwardH();
+                V3& cam = camera.cam;
+                V3& pos = camera.pos;
+                double& vy = camera.vy;
+                bool free = camera.free;
 
 		/*--- モードキー ---*/
 		if (free && !drag.on)
@@ -124,121 +181,28 @@ void Main()
 		}
 
 		/*--- 2D 変換 λ ---*/
-		auto scr = [&](V3 w)
-			{
-				V3 r = w - cam;
-				return project({ dot(r,Rv), dot(r,U), -dot(r,F) },
-							   WINF.x, WINF.y);
-			};
+                auto scr = [&](V3 w)
+                        {
+                                return screenProject(w, cam, Rv, U, F, WINF.x, WINF.y);
+                        };
 
-		/*--- マウスレイ ---*/
-		auto makeRay = [&](Vec2 p)->V3
-			{
-				double sx = p.x - WINF.x, sy = -(p.y - WINF.y);
-				return norm(sx * Rv + sy * U + FOCAL * F);
-			};
-
-
-		/*--- カーソル位置 → 回転角を返す ---*/
+                /*--- カーソル位置 → 回転角を返す ---*/
                 auto cursorAngle = [&](s3d::Vec2 p, V3 axis, V3 pivot)->std::optional<double>
                         {
-                                V3 rd = makeRay(p);
-                                V3 ax = norm(axis);
-
-                                auto scrAngle = [&](double axF)->std::optional<double>
-                                        {
-                                                P2 sp = scr(pivot);
-                                                if (std::isinf(sp.x)) return std::nullopt;
-                                                s3d::Vec2 diff = p - s3d::Vec2{ sp.x, sp.y };
-                                                double ang = std::atan2(diff.y, diff.x);
-                                                if (axF < 0) ang = -ang;
-                                                return ang;
-                                        };
-
-                                // カメラ視線と軸がほぼ平行な場合はスクリーン座標で計算
-                                double axF = dot(ax, F);
-                                if (std::abs(axF) > 0.95)
-                                        return scrAngle(axF);
-
-                                // カメラと軸の両方に垂直な平面
-                                V3 n = norm(cross(ax, F));
-                                if (len(n) < 1e-6) return scrAngle(axF);
-
-                                double denom = dot(rd, n);
-                                V3 hit; bool hitOk = false;
-
-                                // 1) 交点を求める
-                                if (std::abs(denom) > 1e-4)
-                                {
-                                        double t = dot(n, pivot - cam) / denom;
-                                        hit = cam + rd * t;
-                                        hitOk = true;
-                                }
-                                // 2) 平行時はカメラ平面で代用
-                                else
-                                {
-                                        double denomF = dot(rd, F);
-                                        if (std::abs(denomF) > 1e-6)
-                                        {
-                                                double t = dot(F, pivot - cam) / denomF;
-                                                hit = cam + rd * t;
-                                                hitOk = true;
-                                        }
-                                }
-
-                                if (!hitOk)
-                                        return scrAngle(axF);
-
-                                V3 v = hit - pivot;
-
-                                // 軸とカメラに基づく基底ベクトル
-                                V3 p1 = norm(cross(ax, n));
-                                V3 p2 = n;
-
-                                return std::atan2(dot(v, p2), dot(v, p1));
+                                return angleFromCursor(p, axis, pivot, cam, Rv, U, F, WINF.x, WINF.y);
                         };
 
 
-		/*--- Hover キューブ（スクリーン AABB 判定） ---*/
-		hoverIdx = -1; double bestDepth = 1e9;
-		for (size_t i = 0; i < cubes.size(); ++i)
-		{
-			const Cube& cb = cubes[i];
-
-			/* 8 頂点をスクリーンへ投影しバウンディング矩形を作成 */
-			double minX = 1e9, minY = 1e9;
-			double maxX = -1e9, maxY = -1e9;
-			bool   any = false;
-                        for (int k = 0; k < 8; ++k)
-                        {
-                                P2 p = scr(cb.c + qRotate(cb.q, LOCAL[k] * cb.s));
-                                if (std::isinf(p.x)) continue;     // 画面外
-				any = true;
-				minX = std::min(minX, p.x);  maxX = std::max(maxX, p.x);
-				minY = std::min(minY, p.y);  maxY = std::max(maxY, p.y);
-			}
-			if (!any) continue;
-
-			/* カーソルが矩形内なら Hover 候補 */
-			if (cur.x >= minX && cur.x <= maxX && cur.y >= minY && cur.y <= maxY)
-			{
-				/* 奥行きが浅いもの（画面手前）を優先 */
-				double depth = len(cb.c - cam);
-				if (depth < bestDepth)
-				{
-					bestDepth = depth;
-					hoverIdx = static_cast<int>(i);
-				}
-			}
-		}
+                /*--- Hover キューブ（スクリーン AABB 判定） ---*/
+                hoverIdx = detectHoveredCube(cubes, cam, Rv, U, F, cur, WINF.x, WINF.y);
 
 		/*--- Hover ギズモ ---*/
 		hoverHd = Handle::None;
-		if (free && sel != -1 && !KeyAlt.pressed())
-		{
-			const Cube& cb = cubes[sel];
-			const double L = HALF * cb.s * 1.5;
-			P2 ctr = scr(cb.c);
+                if (free && sel != -1 && !KeyAlt.pressed())
+                {
+                        const Cube& cb = cubes[sel];
+                        const double L = HALF * std::max({ cb.s.x, cb.s.y, cb.s.z }) * 1.5;
+                        P2 ctr = scr(cb.c);
 
 			/* Move / Scale 軸 */
 			if (!std::isinf(ctr.x) &&
@@ -250,12 +214,15 @@ void Main()
 					{ {0,1,0}, Palette::Green, Handle::MoveY, Handle::ScaleY },
 					{ {0,0,1}, Palette::Blue,  Handle::MoveZ, Handle::ScaleZ }
 				};
-				double bestA = 1e9;
-				for (const auto& a : AX)
-				{
-					P2 tip = scr(cb.c + a.d * L); if (std::isinf(tip.x)) continue;
-					double dLine = segDist2(cur, { ctr.x,ctr.y }, { tip.x,tip.y });
-					double dTip = (cur - Vec2{ tip.x,tip.y }).lengthSq();
+                                double bestA = 1e9;
+                                for (const auto& a : AX)
+                                {
+                                        V3 dir = (mode == Mode::Scale) ? qRotate(cb.q, a.d) : a.d;
+                                        double sc = (a.d.x != 0) ? cb.s.x : (a.d.y != 0) ? cb.s.y : cb.s.z;
+                                        P2 tip = scr(cb.c + dir * (HALF * 1.5 * sc));
+                                        if (std::isinf(tip.x)) continue;
+                                        double dLine = segDist2(cur, { ctr.x,ctr.y }, { tip.x,tip.y });
+                                        double dTip = (cur - Vec2{ tip.x,tip.y }).lengthSq();
 
 					if (mode == Mode::Move && dLine < 64 && dLine < bestA)
 					{
@@ -279,35 +246,73 @@ void Main()
 			}
 
 			/* Rotate リング */
-                        if (mode == Mode::Rotate && !std::isinf(ctr.x))
-                        {
-                                struct Ring { Handle hd; V3 axis; Color col; };
+			if (mode == Mode::Rotate && !std::isinf(ctr.x))
+			{
+                                struct Ring { Handle hd; Color col; };
                                 const Ring RG[3] = {
-                                        { Handle::RotateX, {1,0,0}, Palette::Red   },
-                                        { Handle::RotateY, {0,1,0}, Palette::Green },
-                                        { Handle::RotateZ, {0,0,1}, Palette::Blue  }
+                                        { Handle::RotateX, Palette::Red   },
+                                        { Handle::RotateY, Palette::Green },
+                                        { Handle::RotateZ, Palette::Blue  }
                                 };
-                                constexpr double THICK = 20.0; // クリック許容範囲
-                                double bestR = 1e9;
-                                Handle bestHd = Handle::None;
-
+                                constexpr int SEG = 64;
                                 for (auto r : RG)
                                 {
-                                        P2 tip = scr(cb.c + r.axis * L);
-                                        if (std::isinf(tip.x)) continue;
-                                        double radius = (Vec2{ tip.x,tip.y } - Vec2{ ctr.x,ctr.y }).length();
-                                        double dist   = (cur - Vec2{ ctr.x,ctr.y }).length();
-                                        double diff   = std::abs(dist - radius);
-                                        if (diff < bestR)
-                                        {
-                                                bestR = diff;
-                                                bestHd = r.hd;
-                                        }
-                                }
+                                        V3 axLocal = (r.hd == Handle::RotateX) ? V3{ 1,0,0 }
+                                                : (r.hd == Handle::RotateY) ? V3{ 0,1,0 }
+                                                : V3{ 0,0,1 };
+                                        V3 ax = qRotate(cb.q, axLocal);
 
-                                if (bestR < THICK)
-                                        hoverHd = bestHd;
-                        }
+                                        double axF = dot(ax, F);
+                                        double bestR = 1e9;
+
+                                        // 角度計算と同様、軸が視線に近い場合はスクリーン円で判定
+                                        if (std::abs(axF) > 0.9)
+                                        {
+                                                P2 sp = scr(cb.c);
+                                                if (!std::isinf(sp.x))
+                                                {
+                                                        V3 dir = cross(ax, Rv);
+                                                        if (len(dir) < 1e-6) dir = cross(ax, U);
+                                                        dir = norm(dir);
+                                                        P2 tip = scr(cb.c + dir * L);
+                                                        if (!std::isinf(tip.x))
+                                                        {
+                                                                double rpx = (Vec2{ tip.x,tip.y } - Vec2{ sp.x,sp.y }).length();
+                                                                bestR = std::abs((cur - Vec2{ sp.x,sp.y }).length() - rpx);
+                                                        }
+                                                }
+                                        }
+                                        else
+                                        {
+                                                for (int k = 0; k < SEG; ++k)
+                                                {
+                                                        double a0 = Math::TwoPi * k / SEG,
+                                                                a1 = Math::TwoPi * (k + 1) / SEG;
+                                                        V3 p0, p1;
+                                                        if (r.hd == Handle::RotateX)
+                                                        {
+                                                                p0 = qRotate(cb.q, { 0,std::sin(a0) * L,std::cos(a0) * L });
+                                                                p1 = qRotate(cb.q, { 0,std::sin(a1) * L,std::cos(a1) * L });
+                                                        }
+                                                        else if (r.hd == Handle::RotateY)
+                                                        {
+                                                                p0 = qRotate(cb.q, { std::sin(a0) * L,0,std::cos(a0) * L });
+                                                                p1 = qRotate(cb.q, { std::sin(a1) * L,0,std::cos(a1) * L });
+                                                        }
+                                                        else
+                                                        {
+                                                                p0 = qRotate(cb.q, { std::sin(a0) * L,std::cos(a0) * L,0 });
+                                                                p1 = qRotate(cb.q, { std::sin(a1) * L,std::cos(a1) * L,0 });
+                                                        }
+                                                        P2 s0 = scr(cb.c + p0), s1 = scr(cb.c + p1);
+                                                        if (std::isinf(s0.x) || std::isinf(s1.x)) continue;
+                                                        bestR = std::min(bestR,
+                                                                segDist2(cur, { s0.x,s0.y }, { s1.x,s1.y }));
+                                                }
+                                        }
+
+                                        if (bestR < 64) { hoverHd = r.hd; break; }
+                                }
 			}
 		}
 
@@ -329,25 +334,29 @@ void Main()
 				if (activeHd == Handle::MoveX || activeHd == Handle::MoveZ)
 					grid.erase({ gIdx(cb.c.x), gIdx(cb.c.z) });
 
-				if (activeHd == Handle::MoveX || activeHd == Handle::MoveY
-				 || activeHd == Handle::MoveZ)
-				{
-					V3 ax = (activeHd == Handle::MoveX) ? V3{ 1,0,0 } :
-						(activeHd == Handle::MoveY) ? V3{ 0,1,0 } :
-						V3{ 0,0,1 };
-					P2 p0 = scr(cb.c), p1 = scr(cb.c + ax);
-					drag.lenPx = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).length();
-					if (drag.lenPx < 1) drag.lenPx = 1;
-				}
+                                if (activeHd == Handle::MoveX || activeHd == Handle::MoveY
+                                 || activeHd == Handle::MoveZ || activeHd == Handle::ScaleX
+                                 || activeHd == Handle::ScaleY || activeHd == Handle::ScaleZ)
+                                {
+                                        V3 axLocal = (activeHd == Handle::MoveX || activeHd == Handle::ScaleX) ? V3{ 1,0,0 } :
+                                                     (activeHd == Handle::MoveY || activeHd == Handle::ScaleY) ? V3{ 0,1,0 } :
+                                                     V3{ 0,0,1 };
+                                        V3 ax = (activeHd == Handle::ScaleX || activeHd == Handle::ScaleY || activeHd == Handle::ScaleZ)
+                                                ? qRotate(cb.q, axLocal) : axLocal;
+                                        P2 p0 = scr(cb.c), p1 = scr(cb.c + ax);
+                                        drag.lenPx = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).length();
+                                        if (drag.lenPx < 1) drag.lenPx = 1;
+                                }
 				/* 回転：軸ベクトルと開始角を保存 */
-				if (activeHd == Handle::RotateX || activeHd == Handle::RotateY
-				|| activeHd == Handle::RotateZ)
-					 {
-					drag.axis = (activeHd == Handle::RotateX) ? V3{ 1,0,0 }
-						 : (activeHd == Handle::RotateY) ? V3{ 0,1,0 }
-					 : V3{ 0,0,1 };
-					drag.ang0 = cursorAngle(cur, drag.axis, cb.c).value_or(0.0);
-					}
+                                if (activeHd == Handle::RotateX || activeHd == Handle::RotateY
+                                || activeHd == Handle::RotateZ)
+                                {
+                                        V3 axLocal = (activeHd == Handle::RotateX) ? V3{ 1,0,0 }
+                                                : (activeHd == Handle::RotateY) ? V3{ 0,1,0 }
+                                                : V3{ 0,0,1 };
+                                        drag.axis = qRotate(cb.q, axLocal);
+                                        drag.ang0 = cursorAngle(cur, drag.axis, cb.c).value_or(0.0);
+                                }
 			}
 			else if (hoverIdx != -1) sel = hoverIdx;
 		}
@@ -370,77 +379,63 @@ void Main()
 			Vec2 d = cur - drag.cur0;
 			Cube& cb = cubes[sel];
 
-			/* Move */
-			if (activeHd == Handle::MoveX || activeHd == Handle::MoveY
-			 || activeHd == Handle::MoveZ)
-			{
-				V3 ax = (activeHd == Handle::MoveX) ? V3{ 1,0,0 } :
-					(activeHd == Handle::MoveY) ? V3{ 0,1,0 } : V3{ 0,0,1 };
-				P2 p0 = scr(drag.p0), p1 = scr(drag.p0 + ax);
-				Vec2 dir = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).normalized();
-				double pix = Dot(d, dir);
-				double world = (pix / drag.lenPx) * 40.0;   // 1px = 40 world
-				cb.c = drag.p0 + ax * world;
-			}
-			/* Rotate：カーソル角度差分で回転 */
-			 else if (activeHd == Handle::RotateX || activeHd == Handle::RotateY
-			 || activeHd == Handle::RotateZ)
+                        /* Move */
+                        if (activeHd == Handle::MoveX || activeHd == Handle::MoveY
+                         || activeHd == Handle::MoveZ)
+                        {
+                                V3 ax = (activeHd == Handle::MoveX) ? V3{ 1,0,0 } :
+                                        (activeHd == Handle::MoveY) ? V3{ 0,1,0 } : V3{ 0,0,1 };
+                                P2 p0 = scr(drag.p0), p1 = scr(drag.p0 + ax);
+                                Vec2 dir = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).normalized();
+                                double pix = Dot(d, dir);
+                                double world = (pix / drag.lenPx) * 40.0;   // 1px = 40 world
+                                cb.c = drag.p0 + ax * world;
+                        }
+                        /* Rotate：カーソル角度差分で回転 */
+                         else if (activeHd == Handle::RotateX || activeHd == Handle::RotateY
+                         || activeHd == Handle::RotateZ)
 				 {
 				if (auto ang = cursorAngle(cur, drag.axis, cb.c))
 					 {
 					double delta = *ang - drag.ang0;
 					if (delta > s3d::Math::Pi)      delta -= s3d::Math::TwoPi;
 					if (delta < -s3d::Math::Pi)      delta += s3d::Math::TwoPi;
-                                        cb.q = qRotateAround(drag.q0, drag.axis, delta);
-                                        }
-                                 }
-			/* Scale */
-			else
-			{
-				cb.s = Clamp(drag.s0 * (1.0 + d.x * 0.002), 0.1, 5.0);
-			}
-		}
-
-		/*--- FPS 移動 (簡略) ---*/
-		if (!free)
-		{
-			if (KeyW.pressed()) pos = pos - MOVE * dt * Fh;
-			if (KeyS.pressed()) pos = pos + MOVE * dt * Fh;
-			if (KeyD.pressed()) pos = pos + MOVE * dt * Rv;
-			if (KeyA.pressed()) pos = pos - MOVE * dt * Rv;
-
-			bool onGround = false; double foot = pos.y - EYE, head = foot + CAP_H;
-			for (const auto& cb : cubes)
-			{
-				double h = HALF * cb.s;
-				/* 着地：下降中 ＋ ±LAND_EPS 以内 */
-				double dynamicEps = Max(2.0, (-vy) * dt + 0.5); // 最低 2px、速いほど広げる
-				if (vy <= 0 &&
-					foot >= cb.c.y + h - dynamicEps &&
-					foot <= cb.c.y + h + dynamicEps)
-				{
-					double dx = std::max(std::abs(pos.x - cb.c.x) - h, 0.0);
-					double dz = std::max(std::abs(pos.z - cb.c.z) - h, 0.0);
-					if (dx * dx + dz * dz <= R * R)
-					{
-						pos.y = cb.c.y + h + EYE; vy = 0; onGround = true;
-						foot = pos.y - EYE; head = foot + CAP_H;
+                                        Quat dq = qAxisAngle(drag.axis, delta);
+                                        cb.q = qNormalize(qMul(dq, drag.q0));
 					}
-				}
-				/* 横衝突 */
-				if (head <= cb.c.y - h || foot >= cb.c.y + h) continue;
-				double cx = std::clamp(pos.x, cb.c.x - h, cb.c.x + h);
-				double cz = std::clamp(pos.z, cb.c.z - h, cb.c.z + h);
-				double dx = pos.x - cx, dz = pos.z - cz, d2 = dx * dx + dz * dz;
-				if (d2 < R * R - 1e-6)
-				{
-					double d = std::sqrt(std::max(d2, 1e-6));
-					V3 push{ dx,0,dz }; push = ((R - d) / d) * push; pos = pos + push;
-				}
-			}
-			if (KeySpace.down() && onGround) vy = JUMP; else vy -= GRAV * dt;
-			pos.y += vy * dt; cam = pos + V3{ 0,EYE,0 };
-		}
+				 }
+                        /* Scale */
+                        else if (activeHd == Handle::ScaleX || activeHd == Handle::ScaleY || activeHd == Handle::ScaleZ)
+                        {
+                                V3 axLocal = (activeHd == Handle::ScaleX) ? V3{1,0,0}
+                                                : (activeHd == Handle::ScaleY) ? V3{0,1,0}
+                                                : V3{0,0,1};
+                                V3 ax = qRotate(cb.q, axLocal);
+                                P2 p0 = scr(drag.p0), p1 = scr(drag.p0 + ax);
+                                Vec2 dir = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).normalized();
+                                double pix = Dot(d, dir);
+                                double f = 1.0 + pix * 0.002;
+                                V3 s = drag.s0;
+                                if (activeHd == Handle::ScaleX) s.x = Clamp(s.x * f, 0.1, 5.0);
+                                else if (activeHd == Handle::ScaleY) s.y = Clamp(s.y * f, 0.1, 5.0);
+                                else s.z = Clamp(s.z * f, 0.1, 5.0);
+                                cb.s = s;
+                        }
+                        else /* ScaleUniform */
+                        {
+                                V3 f = drag.s0 * (1.0 + d.x * 0.002);
+                                f.x = Clamp(f.x, 0.1, 5.0);
+                                f.y = Clamp(f.y, 0.1, 5.0);
+                                f.z = Clamp(f.z, 0.1, 5.0);
+                                cb.s = f;
+                        }
+                }
+
+                /*--- FPS 移動 (簡略) ---*/
+                if (!free)
+                {
+                        handleFPSMovement(camera, cubes, dt);
+                }
 
 		/*================= 描画 =================*/
 		Scene::SetBackground(ColorF{ 0.92,0.95,1 });
@@ -466,11 +461,11 @@ void Main()
 		}
 
 		/*--- ギズモ ---*/
-		if (free && sel != -1)
-		{
-			const Cube& cb = cubes[sel];
-			const double L = HALF * cb.s * 1.5;
-			P2 ctr = scr(cb.c); if (std::isinf(ctr.x)) continue;
+                if (free && sel != -1)
+                {
+                        const Cube& cb = cubes[sel];
+                        const double L = HALF * std::max({ cb.s.x, cb.s.y, cb.s.z }) * 1.5;
+                        P2 ctr = scr(cb.c); if (std::isinf(ctr.x)) continue;
 
 			/* Move / Scale */
 			if (mode == Mode::Move || mode == Mode::Scale)
@@ -481,9 +476,11 @@ void Main()
 					{ {0,1,0}, Palette::Green, Handle::MoveY, Handle::ScaleY },
 					{ {0,0,1}, Palette::Blue,  Handle::MoveZ, Handle::ScaleZ }
 				};
-				for (const auto& a : AX)
-				{
-					P2 tip = scr(cb.c + a.d * L); if (std::isinf(tip.x)) continue;
+                                for (const auto& a : AX)
+                                {
+                                        V3 dir = (mode == Mode::Scale) ? qRotate(cb.q, a.d) : a.d;
+                                        double sc = (a.d.x != 0) ? cb.s.x : (a.d.y != 0) ? cb.s.y : cb.s.z;
+                                        P2 tip = scr(cb.c + dir * (HALF * 1.5 * sc)); if (std::isinf(tip.x)) continue;
 					bool hot = (hoverHd == a.mv || hoverHd == a.sc
 							 || activeHd == a.mv || activeHd == a.sc);
 
@@ -514,42 +511,42 @@ void Main()
 			/* Rotate */
 			if (mode == Mode::Rotate)
 			{
-				struct Ring { Handle hd; Color col; };
-				const Ring RG[3] = {
-					{ Handle::RotateX, Palette::Red   },
-					{ Handle::RotateY, Palette::Green },
-					{ Handle::RotateZ, Palette::Blue  }
-				};
-				constexpr int SEG = 64;
-				for (auto r : RG)
-				{
-					bool hot = (hoverHd == r.hd || activeHd == r.hd);
-					ColorF col = r.col; col.a = hot ? 1.0 : 0.4;
-					for (int k = 0; k < SEG; ++k)
-					{
-						double a0 = Math::TwoPi * k / SEG,
-							a1 = Math::TwoPi * (k + 1) / SEG;
-						V3 p0, p1;
-						if (r.hd == Handle::RotateX)
-						{
-							p0 = { 0,std::sin(a0) * L,std::cos(a0) * L };
-							p1 = { 0,std::sin(a1) * L,std::cos(a1) * L };
-						}
-						else if (r.hd == Handle::RotateY)
-						{
-							p0 = { std::sin(a0) * L,0,std::cos(a0) * L };
-							p1 = { std::sin(a1) * L,0,std::cos(a1) * L };
-						}
-						else
-						{
-							p0 = { std::sin(a0) * L,std::cos(a0) * L,0 };
-							p1 = { std::sin(a1) * L,std::cos(a1) * L,0 };
-						}
-						P2 s0 = scr(cb.c + p0), s1 = scr(cb.c + p1);
-						if (!std::isinf(s0.x) && !std::isinf(s1.x))
-							Line{ s0.x,s0.y, s1.x,s1.y }.draw(hot ? 3 : 2, col);
-					}
-				}
+                                struct Ring { Handle hd; Color col; };
+                                const Ring RG[3] = {
+                                        { Handle::RotateX, Palette::Red   },
+                                        { Handle::RotateY, Palette::Green },
+                                        { Handle::RotateZ, Palette::Blue  }
+                                };
+                                constexpr int SEG = 64;
+                                for (auto r : RG)
+                                {
+                                        bool hot = (hoverHd == r.hd || activeHd == r.hd);
+                                        ColorF col = r.col; col.a = hot ? 1.0 : 0.4;
+                                        for (int k = 0; k < SEG; ++k)
+                                        {
+                                                double a0 = Math::TwoPi * k / SEG,
+                                                        a1 = Math::TwoPi * (k + 1) / SEG;
+                                                V3 p0, p1;
+                                                if (r.hd == Handle::RotateX)
+                                                {
+                                                        p0 = qRotate(cb.q, { 0,std::sin(a0) * L,std::cos(a0) * L });
+                                                        p1 = qRotate(cb.q, { 0,std::sin(a1) * L,std::cos(a1) * L });
+                                                }
+                                                else if (r.hd == Handle::RotateY)
+                                                {
+                                                        p0 = qRotate(cb.q, { std::sin(a0) * L,0,std::cos(a0) * L });
+                                                        p1 = qRotate(cb.q, { std::sin(a1) * L,0,std::cos(a1) * L });
+                                                }
+                                                else
+                                                {
+                                                        p0 = qRotate(cb.q, { std::sin(a0) * L,std::cos(a0) * L,0 });
+                                                        p1 = qRotate(cb.q, { std::sin(a1) * L,std::cos(a1) * L,0 });
+                                                }
+                                                P2 s0 = scr(cb.c + p0), s1 = scr(cb.c + p1);
+                                                if (!std::isinf(s0.x) && !std::isinf(s1.x))
+                                                        Line{ s0.x,s0.y, s1.x,s1.y }.draw(hot ? 3 : 2, col);
+                                        }
+                                }
 			}
 		}
 		/* ====== プレイヤー当たり判定円柱 ====== */

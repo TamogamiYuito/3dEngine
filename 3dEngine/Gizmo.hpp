@@ -26,16 +26,10 @@ struct Drag {
     s3d::Vec2 cur0;
     V3 p0;
     Quat q0{1,0,0,0};
-    double s0{};
+    V3 s0{ 1,1,1 };
     double lenPx = 1;
     V3 axis{};
     double ang0{};
 };
 
-inline double segDist2(s3d::Vec2 p, s3d::Vec2 a, s3d::Vec2 b) {
-    s3d::Vec2 ab = b - a;
-    double l2 = ab.lengthSq();
-    if (l2 < 1e-6) return (p - a).lengthSq();
-    double t = s3d::Clamp(s3d::Dot(p - a, ab) / l2, 0.0, 1.0);
-    return (p - (a + ab * t)).lengthSq();
-}
+double segDist2(s3d::Vec2 p, s3d::Vec2 a, s3d::Vec2 b);

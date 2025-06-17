@@ -23,11 +23,11 @@ struct GKey {
 struct GHash {
     size_t operator()(GKey k) const noexcept { return (size_t)k.gx << 32 ^ (size_t)k.gz; }
 };
-inline int    gIdx(double v) { return (int)std::round(v / (2 * HALF)); }
-inline double gPos(int g) { return g * 2.0 * HALF; }
+int    gIdx(double v);
+double gPos(int g);
 
 struct Cube {
     V3 c;
     Quat q{1,0,0,0};
-    double s = 1;
+    V3 s{ 1,1,1 };
 };

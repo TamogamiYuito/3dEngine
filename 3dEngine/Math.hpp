@@ -11,6 +11,7 @@ inline V3 operator+(V3 a, V3 b) { return { a.x + b.x, a.y + b.y, a.z + b.z }; }
 inline V3 operator-(V3 a, V3 b) { return { a.x - b.x, a.y - b.y, a.z - b.z }; }
 inline V3 operator*(double s, V3 v) { return { s * v.x, s * v.y, s * v.z }; }
 inline V3 operator*(V3 v, double s) { return s * v; }
+inline V3 operator*(V3 a, V3 b) { return { a.x * b.x, a.y * b.y, a.z * b.z }; }
 inline V3 operator/(V3 v, double s) { return { v.x / s, v.y / s, v.z / s }; }
 inline double  dot(V3 a, V3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 inline V3      cross(V3 a, V3 b) {
@@ -71,15 +72,4 @@ inline V3 qRotate(Quat q, V3 v) {
     Quat p{ 0,v.x,v.y,v.z };
     Quat r = qMul(qMul(q, p), qConj(q));
     return { r.x, r.y, r.z };
-}
-
-inline Quat qRotateAround(Quat q, V3 axis, double angle)
-{
-    Quat dq = qAxisAngle(axis, angle);
-    return qNormalize(qMul(dq, q));
-}
-
-inline V3 rotate(V3 v, V3 axis, double angle)
-{
-    return qRotate(qAxisAngle(axis, angle), v);
 }
