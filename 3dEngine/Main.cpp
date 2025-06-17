@@ -10,6 +10,8 @@
 # include "Math.hpp"
 # include "Cube.hpp"
 # include "Gizmo.hpp"
+# include "Camera.hpp"
+# include "RenderUtils.hpp"
 
 
 /*=================================================
@@ -32,9 +34,8 @@ void Main()
 			grid.insert({ x,z });
 		}
 
-	/*--- カメラ & プレイヤー ---*/
-	V3 pos{ 0,HALF + EYE,-200 }, cam = pos;
-	double yaw = 0, pitch = 0, vy = 0; bool free = true;
+        /*--- カメラ & プレイヤー ---*/
+        Camera camera;
 
 	/*--- 編集状態 ---*/
 	Mode   mode = Mode::Move;
@@ -48,58 +49,16 @@ void Main()
 		const double dt = Scene::DeltaTime();
 		const Vec2 cur = Cursor::PosF();
 
-		/*--- 視点モード切替 ---*/
-		if (KeyBackspace.down()) free = true;
-		if (KeyEnter.down()) { free = false; Cursor::SetPos(WINP); }
+                camera.update(dt, WINF, WINP);
 
-		/*--- 視点回転 ---*/
-		Cursor::RequestStyle(free ? CursorStyle::Default
-								 : CursorStyle::Hidden);
-		if (free && MouseR.pressed())
-		{
-			Vec2 d = Cursor::DeltaF();
-			yaw -= d.x * RC_SENS;
-			pitch += d.y * RC_SENS;
-		}
-		else if (!free)
-		{
-			Vec2 d = Cursor::PosF() - WINF;
-			yaw -= d.x * MS_SENS;
-			pitch += d.y * MS_SENS;
-			Cursor::SetPos(WINP);
-		}
-		pitch = Clamp(pitch, -PITCH_LIM, PITCH_LIM);
-
-		/*--- カメラ基底ベクトル ---*/
-		V3 F = norm({ std::cos(pitch) * std::sin(yaw),
-					  std::sin(pitch),
-					 -std::cos(pitch) * std::cos(yaw) });
-		V3 Rv = norm({ -F.z,0,F.x });
-		V3 U = norm(cross(Rv, F));
-		V3 Fh = norm(V3{ F.x,0,F.z }.x == 0 && V3{ F.x,0,F.z }.z == 0
-					 ? V3{ 0,0,1 } : V3{ F.x,0,F.z });
-		cam = free ? pos : pos + V3{ 0,EYE,0 };
-
-		/*--- FreeCam 平行移動 ---*/
-		if (free)
-		{
-			if (MouseR.pressed())
-			{
-				if (KeyW.pressed()) cam = cam - MOVE * dt * Fh;
-				if (KeyS.pressed()) cam = cam + MOVE * dt * Fh;
-				if (KeyD.pressed()) cam = cam + MOVE * dt * Rv;
-				if (KeyA.pressed()) cam = cam - MOVE * dt * Rv;
-				if (KeyQ.pressed()) cam.y += MOVE * dt;
-				if (KeyE.pressed()) cam.y -= MOVE * dt;
-			}
-			if (MouseM.pressed() || (KeyAlt.pressed() && MouseL.pressed()))
-			{
-				Vec2 d = Cursor::DeltaF();
-				cam = cam - (d.x * Rv - d.y * U) * (PAN_SPD * dt / 8);
-			}
-			if (double w = Mouse::Wheel(); w != 0.0) cam = cam - F * w * DOLLY_SPD * dt;
-			pos = cam;
-		}
+                V3 F  = camera.forward();
+                V3 Rv = camera.right();
+                V3 U  = camera.up();
+                V3 Fh = camera.forwardH();
+                V3& cam = camera.cam;
+                V3& pos = camera.pos;
+                double& vy = camera.vy;
+                bool free = camera.free;
 
 		/*--- モードキー ---*/
 		if (free && !drag.on)
@@ -124,34 +83,15 @@ void Main()
 		}
 
 		/*--- 2D 変換 λ ---*/
-		auto scr = [&](V3 w)
-			{
-				V3 r = w - cam;
-				return project({ dot(r,Rv), dot(r,U), -dot(r,F) },
-							   WINF.x, WINF.y);
-			};
+                auto scr = [&](V3 w)
+                        {
+                                return screenProject(w, cam, Rv, U, F, WINF.x, WINF.y);
+                        };
 
-		/*--- マウスレイ ---*/
-		auto makeRay = [&](Vec2 p)->V3
-			{
-				double sx = p.x - WINF.x, sy = -(p.y - WINF.y);
-				return norm(sx * Rv + sy * U + FOCAL * F);
-			};
-
-
-		/*--- カーソル位置 → 回転角を返す ---*/
+                /*--- カーソル位置 → 回転角を返す ---*/
                 auto cursorAngle = [&](s3d::Vec2 p, V3 axis, V3 pivot)->std::optional<double>
                         {
-                                V3 ax = norm(axis);
-                                double axF = dot(ax, F);
-
-                                P2 sp = scr(pivot);
-                                if (std::isinf(sp.x)) return std::nullopt;
-
-                                s3d::Vec2 diff = p - s3d::Vec2{ sp.x, sp.y };
-                                double ang = std::atan2(diff.y, diff.x);
-                                if (axF < 0) ang = -ang;
-                                return ang;
+                                return angleFromCursor(p, axis, pivot, cam, Rv, U, F, WINF.x, WINF.y);
                         };
 
 
