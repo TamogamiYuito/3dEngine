@@ -142,61 +142,16 @@ void Main()
 		/*--- カーソル位置 → 回転角を返す ---*/
                 auto cursorAngle = [&](s3d::Vec2 p, V3 axis, V3 pivot)->std::optional<double>
                         {
-                                V3 rd = makeRay(p);
                                 V3 ax = norm(axis);
-
-                                auto scrAngle = [&](double axF)->std::optional<double>
-                                        {
-                                                P2 sp = scr(pivot);
-                                                if (std::isinf(sp.x)) return std::nullopt;
-                                                s3d::Vec2 diff = p - s3d::Vec2{ sp.x, sp.y };
-                                                double ang = std::atan2(diff.y, diff.x);
-                                                if (axF < 0) ang = -ang;
-                                                return ang;
-                                        };
-
                                 double axF = dot(ax, F);
 
-                                // 軸とカメラ視線が近い場合はスクリーン計算
-                                if (std::abs(axF) > 0.9)
-                                        return scrAngle(axF);
+                                P2 sp = scr(pivot);
+                                if (std::isinf(sp.x)) return std::nullopt;
 
-                                V3 nCam = cross(ax, F);
-                                if (len(nCam) < 1e-6)
-                                        return scrAngle(axF);
-
-                                // 軸平面との交点
-                                double denom = dot(rd, ax);
-                                V3 hit; bool hitOk = false;
-                                if (std::abs(denom) > 1e-4)
-                                {
-                                        double t = dot(ax, pivot - cam) / denom;
-                                        hit = cam + rd * t;
-                                        hitOk = true;
-                                }
-
-                                // 平行時はカメラ平面で代用
-                                if (!hitOk)
-                                {
-                                        double denomF = dot(rd, F);
-                                        if (std::abs(denomF) > 1e-6)
-                                        {
-                                                double t = dot(F, pivot - cam) / denomF;
-                                                hit = cam + rd * t;
-                                                hitOk = true;
-                                        }
-                                }
-
-                                if (!hitOk)
-                                        return scrAngle(axF);
-
-                                V3 v = hit - pivot;
-
-                                // 軸とカメラに基づく基底ベクトル
-                                V3 p2 = norm(nCam);
-                                V3 p1 = norm(cross(ax, p2));
-
-                                return std::atan2(dot(v, p2), dot(v, p1));
+                                s3d::Vec2 diff = p - s3d::Vec2{ sp.x, sp.y };
+                                double ang = std::atan2(diff.y, diff.x);
+                                if (axF < 0) ang = -ang;
+                                return ang;
                         };
 
 
