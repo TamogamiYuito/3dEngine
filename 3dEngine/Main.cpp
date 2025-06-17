@@ -289,36 +289,63 @@ void Main()
 					{ Handle::RotateZ, Palette::Blue  }
 				};
 				constexpr int SEG = 64;
-				for (auto r : RG)
-				{
-					double bestR = 1e9;
-					for (int k = 0; k < SEG; ++k)
-					{
-						double a0 = Math::TwoPi * k / SEG,
-							a1 = Math::TwoPi * (k + 1) / SEG;
-						V3 p0, p1;
-						if (r.hd == Handle::RotateX)
-						{
-							p0 = { 0,std::sin(a0) * L,std::cos(a0) * L };
-							p1 = { 0,std::sin(a1) * L,std::cos(a1) * L };
-						}
-						else if (r.hd == Handle::RotateY)
-						{
-							p0 = { std::sin(a0) * L,0,std::cos(a0) * L };
-							p1 = { std::sin(a1) * L,0,std::cos(a1) * L };
-						}
-						else
-						{
-							p0 = { std::sin(a0) * L,std::cos(a0) * L,0 };
-							p1 = { std::sin(a1) * L,std::cos(a1) * L,0 };
-						}
-						P2 s0 = scr(cb.c + p0), s1 = scr(cb.c + p1);
-						if (std::isinf(s0.x) || std::isinf(s1.x)) continue;
-						bestR = std::min(bestR,
-										 segDist2(cur, { s0.x,s0.y }, { s1.x,s1.y }));
-					}
-					if (bestR < 64) { hoverHd = r.hd; break; }
-				}
+                                for (auto r : RG)
+                                {
+                                        V3 ax = (r.hd == Handle::RotateX) ? V3{ 1,0,0 }
+                                                : (r.hd == Handle::RotateY) ? V3{ 0,1,0 }
+                                                : V3{ 0,0,1 };
+
+                                        double axF = dot(ax, F);
+                                        double bestR = 1e9;
+
+                                        // 角度計算と同様、軸が視線に近い場合はスクリーン円で判定
+                                        if (std::abs(axF) > 0.9)
+                                        {
+                                                P2 sp = scr(cb.c);
+                                                if (!std::isinf(sp.x))
+                                                {
+                                                        V3 dir = cross(ax, Rv);
+                                                        if (len(dir) < 1e-6) dir = cross(ax, U);
+                                                        dir = norm(dir);
+                                                        P2 tip = scr(cb.c + dir * L);
+                                                        if (!std::isinf(tip.x))
+                                                        {
+                                                                double rpx = (Vec2{ tip.x,tip.y } - Vec2{ sp.x,sp.y }).length();
+                                                                bestR = std::abs((cur - Vec2{ sp.x,sp.y }).length() - rpx);
+                                                        }
+                                                }
+                                        }
+                                        else
+                                        {
+                                                for (int k = 0; k < SEG; ++k)
+                                                {
+                                                        double a0 = Math::TwoPi * k / SEG,
+                                                                a1 = Math::TwoPi * (k + 1) / SEG;
+                                                        V3 p0, p1;
+                                                        if (r.hd == Handle::RotateX)
+                                                        {
+                                                                p0 = { 0,std::sin(a0) * L,std::cos(a0) * L };
+                                                                p1 = { 0,std::sin(a1) * L,std::cos(a1) * L };
+                                                        }
+                                                        else if (r.hd == Handle::RotateY)
+                                                        {
+                                                                p0 = { std::sin(a0) * L,0,std::cos(a0) * L };
+                                                                p1 = { std::sin(a1) * L,0,std::cos(a1) * L };
+                                                        }
+                                                        else
+                                                        {
+                                                                p0 = { std::sin(a0) * L,std::cos(a0) * L,0 };
+                                                                p1 = { std::sin(a1) * L,std::cos(a1) * L,0 };
+                                                        }
+                                                        P2 s0 = scr(cb.c + p0), s1 = scr(cb.c + p1);
+                                                        if (std::isinf(s0.x) || std::isinf(s1.x)) continue;
+                                                        bestR = std::min(bestR,
+                                                                segDist2(cur, { s0.x,s0.y }, { s1.x,s1.y }));
+                                                }
+                                        }
+
+                                        if (bestR < 64) { hoverHd = r.hd; break; }
+                                }
 			}
 		}
 
