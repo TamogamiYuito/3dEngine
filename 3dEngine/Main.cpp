@@ -172,7 +172,7 @@ void Main()
                         // Forward direction (horizontal) and right vector
                         V3 Fh = camera.forwardH();
                         V3 Rv = camera.right();
-
+						
                         // Random yaw within ±45 degrees
                         double ang = s3d::Random(-s3d::Math::Pi / 4.0, s3d::Math::Pi / 4.0);
                         V3 dir = norm(std::cos(ang) * Fh + std::sin(ang) * Rv);
