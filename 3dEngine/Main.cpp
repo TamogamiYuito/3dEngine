@@ -391,10 +391,9 @@ void Main()
 					double delta = *ang - drag.ang0;
 					if (delta > s3d::Math::Pi)      delta -= s3d::Math::TwoPi;
 					if (delta < -s3d::Math::Pi)      delta += s3d::Math::TwoPi;
-                                        Quat dq = qAxisAngle(drag.axis, delta);
-                                        cb.q = qNormalize(qMul(dq, drag.q0));
-					}
-				 }
+                                        cb.q = qRotateAround(drag.q0, drag.axis, delta);
+                                        }
+                                 }
 			/* Scale */
 			else
 			{

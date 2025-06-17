@@ -72,3 +72,14 @@ inline V3 qRotate(Quat q, V3 v) {
     Quat r = qMul(qMul(q, p), qConj(q));
     return { r.x, r.y, r.z };
 }
+
+inline Quat qRotateAround(Quat q, V3 axis, double angle)
+{
+    Quat dq = qAxisAngle(axis, angle);
+    return qNormalize(qMul(dq, q));
+}
+
+inline V3 rotate(V3 v, V3 axis, double angle)
+{
+    return qRotate(qAxisAngle(axis, angle), v);
+}
