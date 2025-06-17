@@ -111,6 +111,28 @@ static void handleFPSMovement(Camera& camera, const std::vector<Cube>& cubes, do
         pos.y += vy * dt; cam = pos + V3{ 0,EYE,0 };
 }
 
+static GKey findNearestEmpty(const std::unordered_set<GKey, GHash>& grid, GKey start)
+{
+        if (!grid.contains(start)) return start;
+
+        constexpr int MAX_RADIUS = 20;
+        for (int r = 1; r <= MAX_RADIUS; ++r)
+        {
+                for (int dz = -r; dz <= r; ++dz)
+                {
+                        int dx = r - std::abs(dz);
+                        GKey g1{ start.gx + dx, start.gz + dz };
+                        if (!grid.contains(g1)) return g1;
+                        if (dx != 0)
+                        {
+                                GKey g2{ start.gx - dx, start.gz + dz };
+                                if (!grid.contains(g2)) return g2;
+                        }
+                }
+        }
+        return start;
+}
+
 
 /*=================================================
    Main
@@ -187,10 +209,11 @@ void Main()
 
                         V3 hit = V3{ cam.x, yRand, cam.z } + dist * dir;
                         GKey g{ gIdx(hit.x), gIdx(hit.z) };
-                        if (!grid.contains(g))
+                        GKey place = findNearestEmpty(grid, g);
+                        if (!grid.contains(place))
                         {
-                                cubes.push_back({ { gPos(g.gx), yRand, gPos(g.gz) } });
-                                grid.insert(g);
+                                cubes.push_back({ { gPos(place.gx), yRand, gPos(place.gz) } });
+                                grid.insert(place);
                         }
                 }
 
