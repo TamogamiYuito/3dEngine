@@ -282,18 +282,19 @@ void Main()
 			/* Rotate リング */
 			if (mode == Mode::Rotate && !std::isinf(ctr.x))
 			{
-				struct Ring { Handle hd; Color col; };
-				const Ring RG[3] = {
-					{ Handle::RotateX, Palette::Red   },
-					{ Handle::RotateY, Palette::Green },
-					{ Handle::RotateZ, Palette::Blue  }
-				};
-				constexpr int SEG = 64;
+                                struct Ring { Handle hd; Color col; };
+                                const Ring RG[3] = {
+                                        { Handle::RotateX, Palette::Red   },
+                                        { Handle::RotateY, Palette::Green },
+                                        { Handle::RotateZ, Palette::Blue  }
+                                };
+                                constexpr int SEG = 64;
                                 for (auto r : RG)
                                 {
-                                        V3 ax = (r.hd == Handle::RotateX) ? V3{ 1,0,0 }
+                                        V3 axLocal = (r.hd == Handle::RotateX) ? V3{ 1,0,0 }
                                                 : (r.hd == Handle::RotateY) ? V3{ 0,1,0 }
                                                 : V3{ 0,0,1 };
+                                        V3 ax = qRotate(cb.q, axLocal);
 
                                         double axF = dot(ax, F);
                                         double bestR = 1e9;
@@ -324,18 +325,18 @@ void Main()
                                                         V3 p0, p1;
                                                         if (r.hd == Handle::RotateX)
                                                         {
-                                                                p0 = { 0,std::sin(a0) * L,std::cos(a0) * L };
-                                                                p1 = { 0,std::sin(a1) * L,std::cos(a1) * L };
+                                                                p0 = qRotate(cb.q, { 0,std::sin(a0) * L,std::cos(a0) * L });
+                                                                p1 = qRotate(cb.q, { 0,std::sin(a1) * L,std::cos(a1) * L });
                                                         }
                                                         else if (r.hd == Handle::RotateY)
                                                         {
-                                                                p0 = { std::sin(a0) * L,0,std::cos(a0) * L };
-                                                                p1 = { std::sin(a1) * L,0,std::cos(a1) * L };
+                                                                p0 = qRotate(cb.q, { std::sin(a0) * L,0,std::cos(a0) * L });
+                                                                p1 = qRotate(cb.q, { std::sin(a1) * L,0,std::cos(a1) * L });
                                                         }
                                                         else
                                                         {
-                                                                p0 = { std::sin(a0) * L,std::cos(a0) * L,0 };
-                                                                p1 = { std::sin(a1) * L,std::cos(a1) * L,0 };
+                                                                p0 = qRotate(cb.q, { std::sin(a0) * L,std::cos(a0) * L,0 });
+                                                                p1 = qRotate(cb.q, { std::sin(a1) * L,std::cos(a1) * L,0 });
                                                         }
                                                         P2 s0 = scr(cb.c + p0), s1 = scr(cb.c + p1);
                                                         if (std::isinf(s0.x) || std::isinf(s1.x)) continue;
@@ -378,14 +379,15 @@ void Main()
 					if (drag.lenPx < 1) drag.lenPx = 1;
 				}
 				/* 回転：軸ベクトルと開始角を保存 */
-				if (activeHd == Handle::RotateX || activeHd == Handle::RotateY
-				|| activeHd == Handle::RotateZ)
-					 {
-					drag.axis = (activeHd == Handle::RotateX) ? V3{ 1,0,0 }
-						 : (activeHd == Handle::RotateY) ? V3{ 0,1,0 }
-					 : V3{ 0,0,1 };
-					drag.ang0 = cursorAngle(cur, drag.axis, cb.c).value_or(0.0);
-					}
+                                if (activeHd == Handle::RotateX || activeHd == Handle::RotateY
+                                || activeHd == Handle::RotateZ)
+                                {
+                                        V3 axLocal = (activeHd == Handle::RotateX) ? V3{ 1,0,0 }
+                                                : (activeHd == Handle::RotateY) ? V3{ 0,1,0 }
+                                                : V3{ 0,0,1 };
+                                        drag.axis = qRotate(cb.q, axLocal);
+                                        drag.ang0 = cursorAngle(cur, drag.axis, cb.c).value_or(0.0);
+                                }
 			}
 			else if (hoverIdx != -1) sel = hoverIdx;
 		}
@@ -553,42 +555,42 @@ void Main()
 			/* Rotate */
 			if (mode == Mode::Rotate)
 			{
-				struct Ring { Handle hd; Color col; };
-				const Ring RG[3] = {
-					{ Handle::RotateX, Palette::Red   },
-					{ Handle::RotateY, Palette::Green },
-					{ Handle::RotateZ, Palette::Blue  }
-				};
-				constexpr int SEG = 64;
-				for (auto r : RG)
-				{
-					bool hot = (hoverHd == r.hd || activeHd == r.hd);
-					ColorF col = r.col; col.a = hot ? 1.0 : 0.4;
-					for (int k = 0; k < SEG; ++k)
-					{
-						double a0 = Math::TwoPi * k / SEG,
-							a1 = Math::TwoPi * (k + 1) / SEG;
-						V3 p0, p1;
-						if (r.hd == Handle::RotateX)
-						{
-							p0 = { 0,std::sin(a0) * L,std::cos(a0) * L };
-							p1 = { 0,std::sin(a1) * L,std::cos(a1) * L };
-						}
-						else if (r.hd == Handle::RotateY)
-						{
-							p0 = { std::sin(a0) * L,0,std::cos(a0) * L };
-							p1 = { std::sin(a1) * L,0,std::cos(a1) * L };
-						}
-						else
-						{
-							p0 = { std::sin(a0) * L,std::cos(a0) * L,0 };
-							p1 = { std::sin(a1) * L,std::cos(a1) * L,0 };
-						}
-						P2 s0 = scr(cb.c + p0), s1 = scr(cb.c + p1);
-						if (!std::isinf(s0.x) && !std::isinf(s1.x))
-							Line{ s0.x,s0.y, s1.x,s1.y }.draw(hot ? 3 : 2, col);
-					}
-				}
+                                struct Ring { Handle hd; Color col; };
+                                const Ring RG[3] = {
+                                        { Handle::RotateX, Palette::Red   },
+                                        { Handle::RotateY, Palette::Green },
+                                        { Handle::RotateZ, Palette::Blue  }
+                                };
+                                constexpr int SEG = 64;
+                                for (auto r : RG)
+                                {
+                                        bool hot = (hoverHd == r.hd || activeHd == r.hd);
+                                        ColorF col = r.col; col.a = hot ? 1.0 : 0.4;
+                                        for (int k = 0; k < SEG; ++k)
+                                        {
+                                                double a0 = Math::TwoPi * k / SEG,
+                                                        a1 = Math::TwoPi * (k + 1) / SEG;
+                                                V3 p0, p1;
+                                                if (r.hd == Handle::RotateX)
+                                                {
+                                                        p0 = qRotate(cb.q, { 0,std::sin(a0) * L,std::cos(a0) * L });
+                                                        p1 = qRotate(cb.q, { 0,std::sin(a1) * L,std::cos(a1) * L });
+                                                }
+                                                else if (r.hd == Handle::RotateY)
+                                                {
+                                                        p0 = qRotate(cb.q, { std::sin(a0) * L,0,std::cos(a0) * L });
+                                                        p1 = qRotate(cb.q, { std::sin(a1) * L,0,std::cos(a1) * L });
+                                                }
+                                                else
+                                                {
+                                                        p0 = qRotate(cb.q, { std::sin(a0) * L,std::cos(a0) * L,0 });
+                                                        p1 = qRotate(cb.q, { std::sin(a1) * L,std::cos(a1) * L,0 });
+                                                }
+                                                P2 s0 = scr(cb.c + p0), s1 = scr(cb.c + p1);
+                                                if (!std::isinf(s0.x) && !std::isinf(s1.x))
+                                                        Line{ s0.x,s0.y, s1.x,s1.y }.draw(hot ? 3 : 2, col);
+                                        }
+                                }
 			}
 		}
 		/* ====== プレイヤー当たり判定円柱 ====== */
