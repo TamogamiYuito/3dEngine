@@ -447,7 +447,7 @@ void Main()
                                         double dz = std::max(std::abs(pos.z - cb.c.z) - hz, 0.0);
 					if (dx * dx + dz * dz <= R * R)
 					{
-						pos.y = cb.c.y + h + EYE; vy = 0; onGround = true;
+                                                pos.y = cb.c.y + hy + EYE; vy = 0; onGround = true;
 						foot = pos.y - EYE; head = foot + CAP_H;
 					}
 				}
