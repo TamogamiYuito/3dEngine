@@ -505,11 +505,6 @@ void Game::run() {
                 int k1 = (k + 1) % SEG;
                 if (std::isinf(bp[k].x) || std::isinf(bp[k1].x) ||
                     std::isinf(tp[k].x) || std::isinf(tp[k1].x)) continue;
-                V3 b0v = toView(bv[k]);
-                V3 b1v = toView(bv[k1]);
-                V3 t0v = toView(tv[k]);
-                V3 n = cross(t0v - b0v, b1v - b0v);
-                //if (n.z > EPS) continue;
                 double d = (dot(bv[k] - cam, F) + dot(bv[k1] - cam, F) +
                             dot(tv[k1] - cam, F) + dot(tv[k] - cam, F)) / 4.0;
                 qs.push_back({ d, { bp[k], bp[k1], tp[k1], tp[k] } });
