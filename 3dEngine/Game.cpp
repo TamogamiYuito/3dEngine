@@ -366,6 +366,11 @@ void Game::run() {
         std::sort(drawOrder.begin(), drawOrder.end(),
                   [](const auto& a, const auto& b) { return a.first > b.first; });
 
+        struct FaceDrawG { double d; std::array<P2,4> p; ColorF col; };
+        struct EdgeDrawG { P2 a, b; ColorF col; double th; };
+        std::vector<FaceDrawG> faces;
+        std::vector<EdgeDrawG> edges;
+
         for (auto [_, idx] : drawOrder) {
             const Cube& cb = cubes[idx];
             ColorF col = (idx == sel) ? ColorF(Palette::Red)
@@ -381,8 +386,6 @@ void Game::run() {
                 vp[k] = scr(vw[k]);
             }
 
-            struct FaceDraw { double d; std::array<P2,4> p; };
-            std::vector<FaceDraw> faces;
             for (const auto& f : FACE) {
                 V3 v0 = toView(vw[f[0]]);
                 V3 v1 = toView(vw[f[1]]);
@@ -393,18 +396,23 @@ void Game::run() {
                     std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
                 double depth = (dot(vw[f[0]] - cam, F) + dot(vw[f[1]] - cam, F) +
                                 dot(vw[f[2]] - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
-                faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] } });
+                faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] }, col });
             }
-            std::sort(faces.begin(), faces.end(),
-                      [](const FaceDraw& a, const FaceDraw& b) { return a.d > b.d; });
-            for (const auto& fc : faces)
-                Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
-                         Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(col);
 
-            for (auto [a, b] : EDGE)
+            for (auto [a, b] : EDGE) {
                 if (!std::isinf(vp[a].x) && !std::isinf(vp[b].x))
-                    Line{ vp[a].x,vp[a].y, vp[b].x,vp[b].y }.draw(th, col);
+                    edges.push_back({ vp[a], vp[b], col, th });
+            }
         }
+
+        std::sort(faces.begin(), faces.end(),
+                  [](const FaceDrawG& a, const FaceDrawG& b) { return a.d > b.d; });
+        for (const auto& fc : faces)
+            Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
+                     Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
+
+        for (const auto& e : edges)
+            Line{ e.a.x,e.a.y, e.b.x,e.b.y }.draw(e.th, e.col);
 
         /*--- ギズモ ---*/
         if (free && sel != -1) {
