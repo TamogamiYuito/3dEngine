@@ -502,7 +502,7 @@ void Game::run() {
                 V3 b1v = toView(bv[k1]);
                 V3 t0v = toView(tv[k]);
                 V3 n = cross(t0v - b0v, b1v - b0v);
-                if (n.z > EPS) continue;
+                //if (n.z > EPS) continue;
                 double d = (dot(bv[k] - cam, F) + dot(bv[k1] - cam, F) +
                             dot(tv[k1] - cam, F) + dot(tv[k] - cam, F)) / 4.0;
                 qs.push_back({ d, { bp[k], bp[k1], tp[k1], tp[k] } });
