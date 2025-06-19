@@ -498,10 +498,6 @@ void Game::run() {
                 int k1 = (k + 1) % SEG;
                 if (std::isinf(bp[k].x) || std::isinf(bp[k1].x) ||
                     std::isinf(tp[k].x) || std::isinf(tp[k1].x)) continue;
-                // Use the same winding for all quads so back face culling
-                // works correctly.  The normal of the side quad should point
-                // outwards, which is obtained by the cross product of the
-                // vertical edge and the next base edge.
                 V3 b0v = toView(bv[k]);
                 V3 b1v = toView(bv[k1]);
                 V3 t0v = toView(tv[k]);
