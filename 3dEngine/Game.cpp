@@ -359,12 +359,19 @@ void Game::run() {
         }
 
         /*--- キューブ ---*/
+        std::vector<std::pair<double, int>> drawOrder(cubes.size());
         for (size_t i = 0; i < cubes.size(); ++i) {
-            const Cube& cb = cubes[i];
-            ColorF col = ((int)i == sel) ? ColorF(Palette::Red)
-                          : (free && (int)i == hoverIdx) ? ColorF(Palette::Yellow)
+            drawOrder[i] = { dot(cubes[i].c - cam, F), static_cast<int>(i) };
+        }
+        std::sort(drawOrder.begin(), drawOrder.end(),
+                  [](const auto& a, const auto& b) { return a.first > b.first; });
+
+        for (auto [_, idx] : drawOrder) {
+            const Cube& cb = cubes[idx];
+            ColorF col = (idx == sel) ? ColorF(Palette::Red)
+                          : (free && idx == hoverIdx) ? ColorF(Palette::Yellow)
                           : ColorF{ 1.0,0.8,0.3 };
-            double th = ((int)i == sel) ? 3 : 1;
+            double th = (idx == sel) ? 3 : 1;
 
             std::array<V3, 8> vw;
             std::array<P2, 8> vp;
