@@ -164,6 +164,11 @@ void Game::run() {
         }
 
         auto scr = [&](V3 w) { return screenProject(w, cam, Rv, U, F, WINF.x, WINF.y); };
+        auto toView = [&](V3 w) {
+            V3 r = w - cam;
+            return V3{ dot(r, Rv), dot(r, U), -dot(r, F) };
+        };
+        constexpr double EPS = 1e-6;
         auto cursorAngle = [&](Vec2 p, V3 axis, V3 pivot)->std::optional<double> {
             return angleFromCursor(p, axis, pivot, cam, Rv, U, F, WINF.x, WINF.y);
         };
@@ -372,8 +377,11 @@ void Game::run() {
             struct FaceDraw { double d; std::array<P2,4> p; };
             std::vector<FaceDraw> faces;
             for (const auto& f : FACE) {
-                V3 n = cross(vw[f[1]] - vw[f[0]], vw[f[2]] - vw[f[0]]);
-                if (dot(n, vw[f[0]] - cam) > 0) continue; // back face
+                V3 v0 = toView(vw[f[0]]);
+                V3 v1 = toView(vw[f[1]]);
+                V3 v2 = toView(vw[f[2]]);
+                V3 n = cross(v1 - v0, v2 - v0);
+                if (n.z > EPS) continue; // back face
                 if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
                     std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
                 double depth = (dot(vw[f[0]] - cam, F) + dot(vw[f[1]] - cam, F) +
@@ -494,8 +502,11 @@ void Game::run() {
                 // works correctly.  The normal of the side quad should point
                 // outwards, which is obtained by the cross product of the
                 // vertical edge and the next base edge.
-                V3 n = cross(tv[k] - bv[k], bv[k1] - bv[k]);
-                if (dot(n, bv[k] - cam) > 0) continue;
+                V3 b0v = toView(bv[k]);
+                V3 b1v = toView(bv[k1]);
+                V3 t0v = toView(tv[k]);
+                V3 n = cross(t0v - b0v, b1v - b0v);
+                if (n.z > EPS) continue;
                 double d = (dot(bv[k] - cam, F) + dot(bv[k1] - cam, F) +
                             dot(tv[k1] - cam, F) + dot(tv[k] - cam, F)) / 4.0;
                 qs.push_back({ d, { bp[k], bp[k1], tp[k1], tp[k] } });
