@@ -330,6 +330,11 @@
     <Xml Include="App\example\xml\test.xml" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Camera.hpp" />
+    <ClInclude Include="Cube.hpp" />
+    <ClInclude Include="Gizmo.hpp" />
+    <ClInclude Include="Math.hpp" />
+    <ClInclude Include="RenderUtils.hpp" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="Game.hpp" />
   </ItemGroup>

@@ -5,5 +5,4 @@ void Main()
 {
     Game game;
     game.run();
-
 }
