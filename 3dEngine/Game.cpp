@@ -1,4 +1,4 @@
-#include "Game.hpp"
+﻿#include "Game.hpp"
 #include "RenderUtils.hpp"
 #include <Siv3D.hpp>
 
@@ -128,7 +128,7 @@ void Game::run() {
             if (KeyR.down()) mode = Mode::Scale;
         }
 
-        if (free && SimpleGUI::Button(U"＋ Cube", { 20,20 })) {
+        if (free && SimpleGUI::Button(U"+ Cube", { 20,20 })) {
             V3 Fh = camera.forwardH();
             V3 Rv = camera.right();
             double ang = Random(-Math::Pi / 4.0, Math::Pi / 4.0);
