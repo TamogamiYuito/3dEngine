@@ -381,7 +381,7 @@ void Game::run() {
                 faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] } });
             }
             std::sort(faces.begin(), faces.end(),
-                      [](const FaceDraw& a, const FaceDraw& b) { return a.d < b.d; });
+                      [](const FaceDraw& a, const FaceDraw& b) { return a.d > b.d; });
             for (const auto& fc : faces)
                 Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
                          Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(col);
@@ -524,7 +524,7 @@ void Game::run() {
             }
 
             std::sort(qs.begin(), qs.end(),
-                      [](const QuadDraw& a, const QuadDraw& b) { return a.d < b.d; });
+                      [](const QuadDraw& a, const QuadDraw& b) { return a.d > b.d; });
             for (const auto& q : qs) {
                 if (q.p.size() == 4) {
                     Polygon{ Vec2{q.p[0].x,q.p[0].y}, Vec2{q.p[1].x,q.p[1].y},
