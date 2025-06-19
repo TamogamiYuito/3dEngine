@@ -490,7 +490,11 @@ void Game::run() {
                 int k1 = (k + 1) % SEG;
                 if (std::isinf(bp[k].x) || std::isinf(bp[k1].x) ||
                     std::isinf(tp[k].x) || std::isinf(tp[k1].x)) continue;
-                V3 n = cross(bv[k1] - bv[k], tv[k] - bv[k]);
+                // Use the same winding for all quads so back face culling
+                // works correctly.  The normal of the side quad should point
+                // outwards, which is obtained by the cross product of the
+                // vertical edge and the next base edge.
+                V3 n = cross(tv[k] - bv[k], bv[k1] - bv[k]);
                 if (dot(n, bv[k] - cam) > 0) continue;
                 double d = (dot(bv[k] - cam, F) + dot(bv[k1] - cam, F) +
                             dot(tv[k1] - cam, F) + dot(tv[k] - cam, F)) / 4.0;
