@@ -342,14 +342,34 @@ void Game::run() {
                           : ColorF{ 1.0,0.8,0.3 };
             double th = ((int)i == sel) ? 3 : 1;
 
-            std::array<P2, 8> v;
+            std::array<V3, 8> vw;
+            std::array<P2, 8> vp;
             for (int k = 0; k < 8; ++k) {
                 V3 p = LOCAL[k] * cb.s;
-                v[k] = scr(cb.c + qRotate(cb.q, p));
+                vw[k] = cb.c + qRotate(cb.q, p);
+                vp[k] = scr(vw[k]);
             }
+
+            struct FaceDraw { double d; std::array<P2,4> p; };
+            std::vector<FaceDraw> faces;
+            for (const auto& f : FACE) {
+                V3 n = cross(vw[f[1]] - vw[f[0]], vw[f[2]] - vw[f[0]]);
+                if (dot(n, vw[f[0]] - cam) >= 0) continue; // back face
+                if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
+                    std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
+                double depth = (dot(vw[f[0]] - cam, F) + dot(vw[f[1]] - cam, F) +
+                                dot(vw[f[2]] - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
+                faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] } });
+            }
+            std::sort(faces.begin(), faces.end(),
+                      [](const FaceDraw& a, const FaceDraw& b) { return a.d < b.d; });
+            for (const auto& fc : faces)
+                Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
+                         Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(col);
+
             for (auto [a, b] : EDGE)
-                if (!std::isinf(v[a].x) && !std::isinf(v[b].x))
-                    Line{ v[a].x,v[a].y, v[b].x,v[b].y }.draw(th, col);
+                if (!std::isinf(vp[a].x) && !std::isinf(vp[b].x))
+                    Line{ vp[a].x,vp[a].y, vp[b].x,vp[b].y }.draw(th, col);
         }
 
         /*--- ギズモ ---*/
@@ -434,16 +454,69 @@ void Game::run() {
             constexpr int SEG = 24;
             double foot = pos.y - EYE;
             double top = foot + CAP_H;
+
+            std::array<V3, SEG> bv, tv;
+            std::array<P2, SEG> bp, tp;
             for (int k = 0; k < SEG; ++k) {
-                double a0 = Math::TwoPi * k / SEG;
-                double a1 = Math::TwoPi * (k + 1) / SEG;
-                V3 b0{ pos.x + R * std::cos(a0), foot, pos.z + R * std::sin(a0) };
-                V3 b1{ pos.x + R * std::cos(a1), foot, pos.z + R * std::sin(a1) };
-                V3 t0{ b0.x, top, b0.z }, t1{ b1.x, top, b1.z };
-                P2 p0 = scr(b0), p1 = scr(t0), p2 = scr(b1), p3 = scr(t1);
-                if (!std::isinf(p0.x) && !std::isinf(p1.x)) Line{ p0.x,p0.y, p1.x,p1.y }.draw(1, Palette::Cyan);
-                if (!std::isinf(p0.x) && !std::isinf(p2.x)) Line{ p0.x,p0.y, p2.x,p2.y }.draw(1, Palette::Cyan);
-                if (!std::isinf(p1.x) && !std::isinf(p3.x)) Line{ p1.x,p1.y, p3.x,p3.y }.draw(1, Palette::Cyan);
+                double a = Math::TwoPi * k / SEG;
+                bv[k] = { pos.x + R * std::cos(a), foot, pos.z + R * std::sin(a) };
+                tv[k] = { bv[k].x, top, bv[k].z };
+                bp[k] = scr(bv[k]);
+                tp[k] = scr(tv[k]);
+            }
+
+            struct QuadDraw { double d; std::vector<P2> p; };
+            std::vector<QuadDraw> qs;
+            for (int k = 0; k < SEG; ++k) {
+                int k1 = (k + 1) % SEG;
+                if (std::isinf(bp[k].x) || std::isinf(bp[k1].x) ||
+                    std::isinf(tp[k].x) || std::isinf(tp[k1].x)) continue;
+                V3 n = cross(bv[k1] - bv[k], tv[k] - bv[k]);
+                if (dot(n, bv[k] - cam) >= 0) continue;
+                double d = (dot(bv[k] - cam, F) + dot(bv[k1] - cam, F) +
+                            dot(tv[k1] - cam, F) + dot(tv[k] - cam, F)) / 4.0;
+                qs.push_back({ d, { bp[k], bp[k1], tp[k1], tp[k] } });
+            }
+
+            V3 topC{ pos.x, top, pos.z };
+            if (dot(V3{0,1,0}, topC - cam) < 0) {
+                std::vector<P2> poly(SEG);
+                double d = 0;
+                for (int k = 0; k < SEG; ++k) {
+                    if (std::isinf(tp[k].x)) { poly.clear(); break; }
+                    poly[k] = tp[k];
+                    d += dot(tv[k] - cam, F);
+                }
+                if (!poly.empty())
+                    qs.push_back({ d / SEG, poly });
+            }
+
+            V3 botC{ pos.x, foot, pos.z };
+            if (dot(V3{0,-1,0}, botC - cam) < 0) {
+                std::vector<P2> poly(SEG);
+                double d = 0;
+                for (int k = 0; k < SEG; ++k) {
+                    if (std::isinf(bp[SEG - 1 - k].x)) { poly.clear(); break; }
+                    poly[k] = bp[SEG - 1 - k];
+                    d += dot(bv[SEG - 1 - k] - cam, F);
+                }
+                if (!poly.empty())
+                    qs.push_back({ d / SEG, poly });
+            }
+
+            std::sort(qs.begin(), qs.end(),
+                      [](const QuadDraw& a, const QuadDraw& b) { return a.d < b.d; });
+            for (const auto& q : qs) {
+                if (q.p.size() == 4) {
+                    Polygon{ Vec2{q.p[0].x,q.p[0].y}, Vec2{q.p[1].x,q.p[1].y},
+                             Vec2{q.p[2].x,q.p[2].y}, Vec2{q.p[3].x,q.p[3].y} }.
+                        draw(ColorF(Palette::Cyan));
+                } else if (!q.p.empty()) {
+                    Array<Vec2> arr(q.p.size());
+                    for (size_t i = 0; i < q.p.size(); ++i)
+                        arr[i] = Vec2{ q.p[i].x, q.p[i].y };
+                    Polygon{ arr }.draw(ColorF(Palette::Cyan));
+                }
             }
         }
     }
