@@ -2,6 +2,7 @@
 #include <Siv3D.hpp>
 #include <cmath>
 #include <limits>
+#include <algorithm>
 
 struct V3 {
     double x, y, z;
@@ -72,4 +73,15 @@ inline V3 qRotate(Quat q, V3 v) {
     Quat p{ 0,v.x,v.y,v.z };
     Quat r = qMul(qMul(q, p), qConj(q));
     return { r.x, r.y, r.z };
+}
+
+inline V3 closestPointOBB(V3 p, V3 c, Quat q, V3 h) {
+    V3 d = p - c;
+    V3 ax = qRotate(q, { 1,0,0 });
+    V3 ay = qRotate(q, { 0,1,0 });
+    V3 az = qRotate(q, { 0,0,1 });
+    double lx = std::clamp(dot(d, ax), -h.x, h.x);
+    double ly = std::clamp(dot(d, ay), -h.y, h.y);
+    double lz = std::clamp(dot(d, az), -h.z, h.z);
+    return c + lx * ax + ly * ay + lz * az;
 }

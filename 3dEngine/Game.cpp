@@ -1,6 +1,7 @@
 ﻿#include "Game.hpp"
 #include "RenderUtils.hpp"
 #include <Siv3D.hpp>
+#include <algorithm>
 
 using namespace s3d;
 
@@ -63,22 +64,40 @@ void Game::handleFPSMovement(double dt) {
         double hx = HALF * cb.s.x;
         double hy = HALF * cb.s.y;
         double hz = HALF * cb.s.z;
+
+        Quat invQ = qConj(cb.q);
+        V3 posL  = qRotate(invQ, pos - cb.c);
+        V3 footL = qRotate(invQ, V3{ pos.x, foot, pos.z } - cb.c);
+        V3 headL = qRotate(invQ, V3{ pos.x, head, pos.z } - cb.c);
+
         double dynamicEps = Max(2.0, (-vy) * dt + 0.5);
-        if (vy <= 0 && foot >= cb.c.y + hy - dynamicEps && foot <= cb.c.y + hy + dynamicEps) {
-            double dx = std::max(std::abs(pos.x - cb.c.x) - hx, 0.0);
-            double dz = std::max(std::abs(pos.z - cb.c.z) - hz, 0.0);
+        if (vy <= 0 && footL.y >= hy - dynamicEps && footL.y <= hy + dynamicEps) {
+            double dx = std::max(std::abs(footL.x) - hx, 0.0);
+            double dz = std::max(std::abs(footL.z) - hz, 0.0);
             if (dx * dx + dz * dz <= R * R) {
-                pos.y = cb.c.y + hy + EYE; vy = 0; onGround = true;
-                foot = pos.y - EYE; head = foot + CAP_H;
+                double delta = hy - footL.y;
+                V3 adj = delta * qRotate(cb.q, { 0,1,0 });
+                pos = pos + adj;
+                vy = 0; onGround = true;
+                foot += adj.y; head += adj.y;
+                posL = qRotate(invQ, pos - cb.c);
+                footL = qRotate(invQ, V3{ pos.x, foot, pos.z } - cb.c);
+                headL = qRotate(invQ, V3{ pos.x, head, pos.z } - cb.c);
             }
         }
-        if (head <= cb.c.y - hy || foot >= cb.c.y + hy) continue;
-        double cx = std::clamp(pos.x, cb.c.x - hx, cb.c.x + hx);
-        double cz = std::clamp(pos.z, cb.c.z - hz, cb.c.z + hz);
-        double dx = pos.x - cx, dz = pos.z - cz, d2 = dx * dx + dz * dz;
+
+        if (headL.y <= -hy || footL.y >= hy) continue;
+
+        double clx = std::clamp(posL.x, -hx, hx);
+        double clz = std::clamp(posL.z, -hz, hz);
+        double dx = posL.x - clx, dz = posL.z - clz;
+        double d2 = dx * dx + dz * dz;
         if (d2 < R * R - 1e-6) {
             double d = std::sqrt(std::max(d2, 1e-6));
-            V3 push{ dx,0,dz }; push = ((R - d) / d) * push; pos = pos + push;
+            V3 pushL{ dx,0,dz }; pushL = ((R - d) / d) * pushL;
+            V3 pushW = qRotate(cb.q, pushL);
+            pos = pos + pushW;
+            foot += pushW.y; head += pushW.y;
         }
     }
 
