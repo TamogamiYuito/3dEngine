@@ -373,7 +373,7 @@ void Game::run() {
             std::vector<FaceDraw> faces;
             for (const auto& f : FACE) {
                 V3 n = cross(vw[f[1]] - vw[f[0]], vw[f[2]] - vw[f[0]]);
-                if (dot(n, vw[f[0]] - cam) >= 0) continue; // back face
+                if (dot(n, vw[f[0]] - cam) > 0) continue; // back face
                 if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
                     std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
                 double depth = (dot(vw[f[0]] - cam, F) + dot(vw[f[1]] - cam, F) +
@@ -491,7 +491,7 @@ void Game::run() {
                 if (std::isinf(bp[k].x) || std::isinf(bp[k1].x) ||
                     std::isinf(tp[k].x) || std::isinf(tp[k1].x)) continue;
                 V3 n = cross(bv[k1] - bv[k], tv[k] - bv[k]);
-                if (dot(n, bv[k] - cam) >= 0) continue;
+                if (dot(n, bv[k] - cam) > 0) continue;
                 double d = (dot(bv[k] - cam, F) + dot(bv[k1] - cam, F) +
                             dot(tv[k1] - cam, F) + dot(tv[k] - cam, F)) / 4.0;
                 qs.push_back({ d, { bp[k], bp[k1], tp[k1], tp[k] } });
