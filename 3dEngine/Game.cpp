@@ -280,6 +280,56 @@ void Game::run() {
             drag.on = false; activeHd = Handle::None;
         }
 
+        /*--- ドラッグ処理 ---*/
+        if (drag.on && sel != -1) {
+            Vec2 d = cur - drag.cur0;
+            Cube& cb = cubes[sel];
+
+            /* Move */
+            if (activeHd == Handle::MoveX || activeHd == Handle::MoveY || activeHd == Handle::MoveZ) {
+                V3 ax = (activeHd == Handle::MoveX) ? V3{ 1,0,0 }
+                        : (activeHd == Handle::MoveY) ? V3{ 0,1,0 } : V3{ 0,0,1 };
+                P2 p0 = scr(drag.p0), p1 = scr(drag.p0 + ax);
+                Vec2 dir = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).normalized();
+                double pix = Dot(d, dir);
+                double world = (pix / drag.lenPx) * 40.0;   // 1px = 40 world
+                cb.c = drag.p0 + ax * world;
+            }
+            /* Rotate: apply cursor angle difference */
+            else if (activeHd == Handle::RotateX || activeHd == Handle::RotateY || activeHd == Handle::RotateZ) {
+                if (auto ang = cursorAngle(cur, drag.axis, cb.c)) {
+                    double delta = *ang - drag.ang0;
+                    if (delta > s3d::Math::Pi)      delta -= s3d::Math::TwoPi;
+                    if (delta < -s3d::Math::Pi)     delta += s3d::Math::TwoPi;
+                    Quat dq = qAxisAngle(drag.axis, delta);
+                    cb.q = qNormalize(qMul(dq, drag.q0));
+                }
+            }
+            /* Scale */
+            else if (activeHd == Handle::ScaleX || activeHd == Handle::ScaleY || activeHd == Handle::ScaleZ) {
+                V3 axLocal = (activeHd == Handle::ScaleX) ? V3{1,0,0}
+                                : (activeHd == Handle::ScaleY) ? V3{0,1,0}
+                                : V3{0,0,1};
+                V3 ax = qRotate(cb.q, axLocal);
+                P2 p0 = scr(drag.p0), p1 = scr(drag.p0 + ax);
+                Vec2 dir = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).normalized();
+                double pix = Dot(d, dir);
+                double f = 1.0 + pix * 0.002;
+                V3 s = drag.s0;
+                if (activeHd == Handle::ScaleX) s.x = Clamp(s.x * f, 0.1, 5.0);
+                else if (activeHd == Handle::ScaleY) s.y = Clamp(s.y * f, 0.1, 5.0);
+                else s.z = Clamp(s.z * f, 0.1, 5.0);
+                cb.s = s;
+            } else {
+                /* ScaleUniform */
+                V3 f = drag.s0 * (1.0 + d.x * 0.002);
+                f.x = Clamp(f.x, 0.1, 5.0);
+                f.y = Clamp(f.y, 0.1, 5.0);
+                f.z = Clamp(f.z, 0.1, 5.0);
+                cb.s = f;
+            }
+        }
+
         if (!free) {
             handleFPSMovement(dt);
         }
