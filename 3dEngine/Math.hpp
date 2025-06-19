@@ -28,9 +28,9 @@ struct P2 {
 };
 constexpr double CAM_DIST = 300;
 constexpr double FOCAL = 400;
-// Move the near clip plane closer to the camera so objects do not disappear
-// when the camera is very near. Previously NEAR_Z was 1.
-constexpr double NEAR_Z = 0.1;
+// Move the near clip plane even closer to the camera so objects do not
+// disappear when the camera is very near.
+constexpr double NEAR_Z = 0.01;
 inline P2 project(V3 v, double cx, double cy) {
     double z = v.z + CAM_DIST;
     if (z < NEAR_Z) {
