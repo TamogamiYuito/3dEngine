@@ -120,6 +120,7 @@
     <ClCompile Include="RenderUtils.cpp" />
     <ClCompile Include="Gizmo.cpp" />
     <ClCompile Include="Cube.cpp" />
+    <ClCompile Include="Game.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
@@ -329,7 +330,13 @@
     <Xml Include="App\example\xml\test.xml" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Camera.hpp" />
+    <ClInclude Include="Cube.hpp" />
+    <ClInclude Include="Gizmo.hpp" />
+    <ClInclude Include="Math.hpp" />
+    <ClInclude Include="RenderUtils.hpp" />
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="Game.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App\example\obj\blacksmith.obj">
