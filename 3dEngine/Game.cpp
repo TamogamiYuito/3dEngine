@@ -373,6 +373,7 @@ void Game::run() {
 
         for (auto [_, idx] : drawOrder) {
             const Cube& cb = cubes[idx];
+			//キューブのカラー決め
             ColorF col = (idx == sel) ? ColorF(Palette::Red)
                           : (free && idx == hoverIdx) ? ColorF(Palette::Yellow)
                           : ColorF{ 1.0,0.8,0.3 };
