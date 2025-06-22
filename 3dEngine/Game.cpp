@@ -374,9 +374,14 @@ void Game::run() {
         for (auto [_, idx] : drawOrder) {
             const Cube& cb = cubes[idx];
 			//キューブのカラー決め
-            ColorF col = (idx == sel) ? ColorF(Palette::Red)
-                          : (free && idx == hoverIdx) ? ColorF(Palette::Yellow)
-                          : ColorF{ 1.0,0.8,0.3 };
+            ColorF col;
+            if (idx == sel) {
+                col = ColorF(Palette::Red);
+            } else if (free && idx == hoverIdx) {
+                col = ColorF(Palette::Yellow);
+            } else {
+                col = ColorF{ 1.0,0.8,0.3 };
+            }
             double th = (idx == sel) ? 3 : 1;
 
             std::array<V3, 8> vw;
