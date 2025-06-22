@@ -370,9 +370,9 @@ void Game::run() {
                   [](const auto& a, const auto& b) { return a.first > b.first; });
 
         struct FaceDrawG { double d; std::array<P2,4> p; ColorF col; bool selected;};
-        struct EdgeDrawG { P2 a, b; ColorF col; double th; };
-		std::vector<FaceDrawG> faces, facesSel;
-		std::vector<EdgeDrawG> edges, edgesSel;
+        struct EdgeDrawG { double d; P2 a, b; ColorF col; double th; bool selected;};
+		std::vector<FaceDrawG> faces;
+		std::vector<EdgeDrawG> edges;
 
         for (auto [_, idx] : drawOrder) {
 			const Cube& cb = cubes[idx];
@@ -390,13 +390,15 @@ void Game::run() {
                 vw[k] = cb.c + qRotate(cb.q, p);
                 vp[k] = scr(vw[k]);
             }
+			
 
             for (const auto& f : FACE) {
                 V3 v0 = toView(vw[f[0]]);
                 V3 v1 = toView(vw[f[1]]);
                 V3 v2 = toView(vw[f[2]]);
                 V3 n = cross(v1 - v0, v2 - v0);
-                if (n.z > EPS) continue; // back face
+                //if (n.z > EPS) continue; // back face
+
                 if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
                     std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
                 double depth = (dot(vw[f[0]] - cam, F) + dot(vw[f[1]] - cam, F) +
@@ -409,9 +411,13 @@ void Game::run() {
 			// ── 辺を push ────────────────────
 			for (auto [a, b] : EDGE)
 			{
-				if (!std::isinf(vp[a].x) && !std::isinf(vp[b].x))
-					(idx == sel ? edgesSel : edges)
-					.push_back({ vp[a], vp[b], col, th });
+				if (std::isinf(vp[a].x) || std::isinf(vp[b].x)) continue;
+
+				double depthEdge = (dot(vw[a] - cam, F) + dot(vw[b] - cam, F)) * 0.5;
+				bool isSel = (idx == sel);
+				if (isSel) depthEdge -= DEPTH_EPS;   // ← 符号は faces と同じに
+
+				edges.push_back({ depthEdge, vp[a], vp[b], col, th, isSel });
 			}
         }
 
@@ -423,17 +429,17 @@ void Game::run() {
             Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
                      Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
 
-        //for (const auto& e : edges)
-			//Line{ e.a.x,e.a.y, e.b.x,e.b.y }.draw(e.th, e.col);
+
+		std::stable_sort(edges.begin(), edges.end(),
+			[](const EdgeDrawG& a, const EdgeDrawG& b)
+			{
+						if (std::abs(a.d - b.d) > DEP_TOL)     // 1. 深度優先
+							return a.d > b.d;                  // （奥→手前）
+
+						return !a.selected && b.selected;      // 2. 同深度なら選択を後描き
+			});
 
 
-		std::sort(facesSel.begin(), facesSel.end(),
-		  [](auto& a, auto& b) { return a.d > b.d; });
-		for (auto& fc : facesSel)
-			Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
-					 Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
-		//for (auto& e : edgesSel)
-			//Line{ e.a.x,e.a.y, e.b.x,e.b.y }.draw(e.th, e.col);
 
         /*--- ギズモ ---*/
         if (free && sel != -1) {
@@ -512,74 +518,134 @@ void Game::run() {
             }
         }
 
-        /* ====== プレイヤー当たり判定円柱 ====== */
-        if (!free) {
-            constexpr int SEG = 24;
-            double foot = pos.y - EYE;
-            double top = foot + CAP_H;
 
-            std::array<V3, SEG> bv, tv;
-            std::array<P2, SEG> bp, tp;
-            for (int k = 0; k < SEG; ++k) {
-                double a = Math::TwoPi * k / SEG;
-                bv[k] = { pos.x + R * std::cos(a), foot, pos.z + R * std::sin(a) };
-                tv[k] = { bv[k].x, top, bv[k].z };
-                bp[k] = scr(bv[k]);
-                tp[k] = scr(tv[k]);
-            }
 
-            struct QuadDraw { double d; std::vector<P2> p; };
-            std::vector<QuadDraw> qs;
-            for (int k = 0; k < SEG; ++k) {
-                int k1 = (k + 1) % SEG;
-                if (std::isinf(bp[k].x) || std::isinf(bp[k1].x) ||
-                    std::isinf(tp[k].x) || std::isinf(tp[k1].x)) continue;
-                double d = (dot(bv[k] - cam, F) + dot(bv[k1] - cam, F) +
-                            dot(tv[k1] - cam, F) + dot(tv[k] - cam, F)) / 4.0;
-                qs.push_back({ d, { bp[k], bp[k1], tp[k1], tp[k] } });
-            }
+		if (!free)
+		{
+			constexpr int  SEG = 24;
+			constexpr double DEP_TOL = 1e-6;
+			constexpr double DEP_EPS = 1e-4;
 
-            V3 topC{ pos.x, top, pos.z };
-            if (dot(V3{0,1,0}, topC - cam) < 0) {
-                std::vector<P2> poly(SEG);
-                double d = 0;
-                for (int k = 0; k < SEG; ++k) {
-                    if (std::isinf(tp[k].x)) { poly.clear(); break; }
-                    poly[k] = tp[k];
-                    d += dot(tv[k] - cam, F);
-                }
-                if (!poly.empty())
-                    qs.push_back({ d / SEG, poly });
-            }
+			double foot = pos.y - EYE;
+			double top = foot + CAP_H;
 
-            V3 botC{ pos.x, foot, pos.z };
-            if (dot(V3{0,-1,0}, botC - cam) < 0) {
-                std::vector<P2> poly(SEG);
-                double d = 0;
-                for (int k = 0; k < SEG; ++k) {
-                    if (std::isinf(bp[SEG - 1 - k].x)) { poly.clear(); break; }
-                    poly[k] = bp[SEG - 1 - k];
-                    d += dot(bv[SEG - 1 - k] - cam, F);
-                }
-                if (!poly.empty())
-                    qs.push_back({ d / SEG, poly });
-            }
+			std::array<V3, SEG> bv, tv;
+			std::array<P2, SEG> bp, tp;
 
-            std::sort(qs.begin(), qs.end(),
-                      [](const QuadDraw& a, const QuadDraw& b) { return a.d > b.d; });
-            for (const auto& q : qs) {
-                if (q.p.size() == 4) {
-                    Polygon{ Vec2{q.p[0].x,q.p[0].y}, Vec2{q.p[1].x,q.p[1].y},
-                             Vec2{q.p[2].x,q.p[2].y}, Vec2{q.p[3].x,q.p[3].y} }.
-                        draw(ColorF(Palette::Cyan));
-                } else if (!q.p.empty()) {
-                    Array<Vec2> arr(q.p.size());
-                    for (size_t i = 0; i < q.p.size(); ++i)
-                        arr[i] = Vec2{ q.p[i].x, q.p[i].y };
-                    Polygon{ arr }.draw(ColorF(Palette::Cyan));
-                }
-            }
-        }
+			for (int k = 0; k < SEG; ++k)
+			{
+				double a = Math::TwoPi * k / SEG;
+				bv[k] = { pos.x + R * std::cos(a), foot, pos.z + R * std::sin(a) };
+				tv[k] = { bv[k].x, top,            bv[k].z };
+				bp[k] = scr(bv[k]);
+				tp[k] = scr(tv[k]);
+			}
+
+			struct QuadDraw { double d; std::vector<P2> p; };
+			struct EdgeDraw { double d; P2 a, b; double th; };
+
+			std::vector<QuadDraw> qs;
+			std::vector<EdgeDraw> es;
+
+			/* --- 側面 --- */
+			for (int k = 0; k < SEG; ++k)
+			{
+				int k1 = (k + 1) % SEG;
+				if (std::isinf(bp[k].x) || std::isinf(bp[k1].x) ||
+					std::isinf(tp[k].x) || std::isinf(tp[k1].x)) continue;
+
+				double d = (dot(bv[k] - cam, F) + dot(bv[k1] - cam, F) +
+							dot(tv[k1] - cam, F) + dot(tv[k] - cam, F)) * 0.25;
+				qs.push_back({ d, { bp[k], bp[k1], tp[k1], tp[k] } });
+
+				/* 縦エッジ */
+				double dv = 0.5 * (dot(bv[k] - cam, F) + dot(tv[k] - cam, F));
+				es.push_back({ dv, bp[k], tp[k], 2.0 });
+
+				/* 上リング */
+				double dt = 0.5 * (dot(tv[k] - cam, F) + dot(tv[k1] - cam, F));
+				es.push_back({ dt, tp[k], tp[k1], 2.0 });
+
+				/* 下リング */
+				double db = 0.5 * (dot(bv[k] - cam, F) + dot(bv[k1] - cam, F));
+				es.push_back({ db, bp[k1], bp[k], 2.0 });     // 時計回りに反転
+			}
+
+			/* --- 上面 --- */
+			{
+				V3 topC{ pos.x, top, pos.z };
+				if (dot(V3{ 0,1,0 }, topC - cam) < 0)
+				{
+					std::vector<P2> poly(SEG);
+					double d = 0;
+					bool ok = true;
+					for (int k = 0; k < SEG; ++k)
+					{
+						if (std::isinf(tp[k].x)) { ok = false; break; }
+						poly[k] = tp[k];
+						d += dot(tv[k] - cam, F);
+					}
+					if (ok) qs.push_back({ d / SEG, poly });
+				}
+			}
+
+			/* --- 下面 --- */
+			{
+				V3 botC{ pos.x, foot, pos.z };
+				if (dot(V3{ 0,-1,0 }, botC - cam) < 0)
+				{
+					std::vector<P2> poly(SEG);
+					double d = 0;
+					bool ok = true;
+					for (int k = 0; k < SEG; ++k)
+					{
+						int kk = SEG - 1 - k;
+						if (std::isinf(bp[kk].x)) { ok = false; break; }
+						poly[k] = bp[kk];
+						d += dot(bv[kk] - cam, F);
+					}
+					if (ok) qs.push_back({ d / SEG, poly });
+				}
+			}
+
+			/* --- 描画順ソート --- */
+			std::stable_sort(qs.begin(), qs.end(),
+				[&](const QuadDraw& a, const QuadDraw& b)
+				{
+							if (std::abs(a.d - b.d) > DEP_TOL) return a.d < b.d;
+							return false;
+				});
+			std::stable_sort(es.begin(), es.end(),
+				[&](const EdgeDraw& a, const EdgeDraw& b)
+				{
+							if (std::abs(a.d - b.d) > DEP_TOL) return a.d < b.d;
+							return false;
+				});
+
+			/* --- フィル --- */
+			for (const auto& q : qs)
+			{
+				if (q.p.size() == 4)
+				{
+					Polygon{ Vec2{ q.p[0].x,q.p[0].y },
+							 Vec2{ q.p[1].x,q.p[1].y },
+							 Vec2{ q.p[2].x,q.p[2].y },
+							 Vec2{ q.p[3].x,q.p[3].y } }
+					.draw(ColorF(Palette::Cyan, 0.4));
+				}
+				else
+				{
+					Array<Vec2> arr(q.p.size());
+					for (size_t i = 0; i < q.p.size(); ++i)
+						arr[i] = Vec2{ q.p[i].x, q.p[i].y };
+					Polygon{ arr }.draw(ColorF(Palette::Cyan, 0.4));
+				}
+			}
+
+			/* --- エッジ --- */
+			for (const auto& e : es)
+				Line{ e.a.x, e.a.y, e.b.x, e.b.y }.draw(e.th, ColorF(Palette::Cyan));
+		}
     }
 }
 
