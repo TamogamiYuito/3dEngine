@@ -359,6 +359,9 @@ void Game::run() {
         }
 
         /*--- キューブ ---*/
+		constexpr double DEPTH_EPS = 1e-4;
+
+
         std::vector<std::pair<double, int>> drawOrder(cubes.size());
         for (size_t i = 0; i < cubes.size(); ++i) {
             drawOrder[i] = { dot(cubes[i].c - cam, F), static_cast<int>(i) };
@@ -366,23 +369,19 @@ void Game::run() {
         std::sort(drawOrder.begin(), drawOrder.end(),
                   [](const auto& a, const auto& b) { return a.first > b.first; });
 
-        struct FaceDrawG { double d; std::array<P2,4> p; ColorF col; };
+        struct FaceDrawG { double d; std::array<P2,4> p; ColorF col; bool selected;};
         struct EdgeDrawG { P2 a, b; ColorF col; double th; };
-        std::vector<FaceDrawG> faces;
-        std::vector<EdgeDrawG> edges;
+		std::vector<FaceDrawG> faces, facesSel;
+		std::vector<EdgeDrawG> edges, edgesSel;
 
         for (auto [_, idx] : drawOrder) {
-            const Cube& cb = cubes[idx];
-			//キューブのカラー決め
-            ColorF col;
-            if (idx == sel) {
-                col = ColorF(Palette::Red);
-            } else if (free && idx == hoverIdx) {
-                col = ColorF(Palette::Yellow);
-            } else {
-                col = ColorF{ 1.0,0.8,0.3 };
-            }
-            double th = (idx == sel) ? 3 : 1;
+			const Cube& cb = cubes[idx];
+
+			// ── 色決定 ───────────────────────
+			ColorF col = ColorF{ 1.0, 0.8, 0.3 };
+			if (free && idx == hoverIdx) col = ColorF(Palette::Yellow);
+			if (idx == sel)              col = ColorF(Palette::Red);
+			double th = (idx == sel) ? 3 : 1;
 
             std::array<V3, 8> vw;
             std::array<P2, 8> vp;
@@ -402,23 +401,39 @@ void Game::run() {
                     std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
                 double depth = (dot(vw[f[0]] - cam, F) + dot(vw[f[1]] - cam, F) +
                                 dot(vw[f[2]] - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
-                faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] }, col });
+				bool isSel = (idx == sel);
+				faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] },
+								 col, isSel });
             }
 
-            for (auto [a, b] : EDGE) {
-                if (!std::isinf(vp[a].x) && !std::isinf(vp[b].x))
-                    edges.push_back({ vp[a], vp[b], col, th });
-            }
+			// ── 辺を push ────────────────────
+			for (auto [a, b] : EDGE)
+			{
+				if (!std::isinf(vp[a].x) && !std::isinf(vp[b].x))
+					(idx == sel ? edgesSel : edges)
+					.push_back({ vp[a], vp[b], col, th });
+			}
         }
 
-        std::sort(faces.begin(), faces.end(),
-                  [](const FaceDrawG& a, const FaceDrawG& b) { return a.d > b.d; });
+		constexpr double DEP_TOL = 1e-6;    // 「ほぼ同じ深度」とみなす閾値
+
+		std::sort(faces.begin(), faces.end(),
+		  [](auto& a, auto& b) { return a.d < b.d; });
         for (const auto& fc : faces)
             Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
                      Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
 
-        for (const auto& e : edges)
-            Line{ e.a.x,e.a.y, e.b.x,e.b.y }.draw(e.th, e.col);
+        //for (const auto& e : edges)
+			//Line{ e.a.x,e.a.y, e.b.x,e.b.y }.draw(e.th, e.col);
+
+
+		std::sort(facesSel.begin(), facesSel.end(),
+		  [](auto& a, auto& b) { return a.d > b.d; });
+		for (auto& fc : facesSel)
+			Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
+					 Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
+		//for (auto& e : edgesSel)
+			//Line{ e.a.x,e.a.y, e.b.x,e.b.y }.draw(e.th, e.col);
 
         /*--- ギズモ ---*/
         if (free && sel != -1) {
