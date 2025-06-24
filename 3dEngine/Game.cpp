@@ -1,5 +1,6 @@
 ﻿#include "Game.hpp"
 #include "RenderUtils.hpp"
+#include "Light.hpp"
 #include <Siv3D.hpp>
 #include <algorithm>
 
@@ -12,6 +13,7 @@ Game::Game() {
             grid.insert({ x, z });
         }
     }
+    light.direction = norm(V3{ -1, -1, -1 });
 }
 
 int Game::detectHoveredCube(const Vec2& cur, double cx, double cy) {
@@ -370,9 +372,11 @@ void Game::run() {
                   [](const auto& a, const auto& b) { return a.first > b.first; });
 
         struct FaceDrawG { double d; std::array<P2,4> p; ColorF col; bool selected;};
+        struct ShadowDraw { std::array<P2,4> p; };
         struct EdgeDrawG { double d; P2 a, b; ColorF col; double th; bool selected;};
-		std::vector<FaceDrawG> faces;
-		std::vector<EdgeDrawG> edges;
+        std::vector<FaceDrawG> faces;
+        std::vector<EdgeDrawG> edges;
+        std::vector<ShadowDraw> shadows;
 
         for (auto [_, idx] : drawOrder) {
 			const Cube& cb = cubes[idx];
@@ -393,20 +397,34 @@ void Game::run() {
 			
 
             for (const auto& f : FACE) {
-                V3 v0 = toView(vw[f[0]]);
-                V3 v1 = toView(vw[f[1]]);
-                V3 v2 = toView(vw[f[2]]);
-                V3 n = cross(v1 - v0, v2 - v0);
-                //if (n.z > EPS) continue; // back face
+                V3 v0 = vw[f[0]];
+                V3 v1 = vw[f[1]];
+                V3 v2 = vw[f[2]];
+                V3 nW = norm(cross(v1 - v0, v2 - v0));
+                double shade = light.intensity * std::max(0.0, dot(nW, -light.direction));
 
                 if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
                     std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
-                double depth = (dot(vw[f[0]] - cam, F) + dot(vw[f[1]] - cam, F) +
-                                dot(vw[f[2]] - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
-				bool isSel = (idx == sel);
-				faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] },
-								 col, isSel });
+                double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
+                                dot(v2 - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
+                bool isSel = (idx == sel);
+                ColorF shaded = col * shade;
+                faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] }, shaded, isSel });
             }
+
+            // --- Shadow polygon ---
+            const std::array<int,4> BOT = FACE[4];
+            std::array<P2,4> sp;
+            bool okShadow = true;
+            for (int si = 0; si < 4; ++si) {
+                V3 v = vw[BOT[si]];
+                if (std::abs(light.direction.y) < 1e-6) { okShadow = false; break; }
+                double t = (SHADOW_PLANE_Y - v.y) / light.direction.y;
+                V3 proj = v + light.direction * t;
+                sp[si] = scr(proj);
+                if (std::isinf(sp[si].x)) { okShadow = false; break; }
+            }
+            if (okShadow) shadows.push_back({ sp });
 
 			// ── 辺を push ────────────────────
 			for (auto [a, b] : EDGE)
@@ -425,6 +443,11 @@ void Game::run() {
 
 		std::sort(faces.begin(), faces.end(),
 		  [](auto& a, auto& b) { return a.d < b.d; });
+        for (const auto& sh : shadows)
+            Polygon{ Vec2{sh.p[0].x,sh.p[0].y}, Vec2{sh.p[1].x,sh.p[1].y},
+                     Vec2{sh.p[2].x,sh.p[2].y}, Vec2{sh.p[3].x,sh.p[3].y} }
+                .draw(ColorF{0,0,0,0.2});
+
         for (const auto& fc : faces)
             Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
                      Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
