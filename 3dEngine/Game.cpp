@@ -168,7 +168,7 @@ void Game::run() {
             V3 r = w - cam;
             return V3{ dot(r, Rv), dot(r, U), -dot(r, F) };
         };
-        constexpr double EPS = 1e-6;
+        constexpr double EPS = 1e-4;
         auto cursorAngle = [&](Vec2 p, V3 axis, V3 pivot)->std::optional<double> {
             return angleFromCursor(p, axis, pivot, cam, Rv, U, F, WINF.x, WINF.y);
         };
@@ -397,7 +397,17 @@ void Game::run() {
                 V3 v1 = toView(vw[f[1]]);
                 V3 v2 = toView(vw[f[2]]);
                 V3 n = cross(v1 - v0, v2 - v0);
-                //if (n.z > EPS) continue; // back face
+				if (n.z > EPS) {
+					V3 w0 = vw[f[0]];
+					V3 w1 = vw[f[1]];
+					V3 w2 = vw[f[2]];
+					V3 faceNormal = cross(w1 - w0, w2 - w0);
+					V3 center = (w0 + w1 + w2) / 3.0;
+					V3 toCam = cam - center;
+					constexpr double EPS = 1e-5;
+
+					if (dot(faceNormal, toCam) <= EPS) continue; // 背面
+				}
 
                 if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
                     std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;

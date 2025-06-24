@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Math.hpp"
 #include <Siv3D.hpp>
 #include <optional>
