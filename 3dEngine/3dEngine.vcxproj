@@ -120,6 +120,7 @@
     <ClCompile Include="RenderUtils.cpp" />
     <ClCompile Include="Gizmo.cpp" />
     <ClCompile Include="Cube.cpp" />
+    <ClCompile Include="Light.cpp" />
     <ClCompile Include="Game.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -332,6 +333,7 @@
   <ItemGroup>
     <ClInclude Include="Camera.hpp" />
     <ClInclude Include="Cube.hpp" />
+    <ClInclude Include="IHoverable.hpp" />
     <ClInclude Include="Gizmo.hpp" />
     <ClInclude Include="Light.hpp" />
     <ClInclude Include="Math.hpp" />

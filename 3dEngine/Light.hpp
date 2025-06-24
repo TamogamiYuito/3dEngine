@@ -1,7 +1,8 @@
 ﻿#pragma once
 #include "Math.hpp"
+#include "IHoverable.hpp"
 
-struct Light {
+struct Light : public IHoverable {
     // Center position of the light gizmo
     V3   c{ 0,0,0 };
     // Orientation of the light gizmo
@@ -15,4 +16,7 @@ struct Light {
 
     // Get the light direction from the orientation
     V3 dir() const { return qRotate(q, { 0,-1,0 }); }
+
+    bool checkHovered(const s3d::Vec2& cur, double cx, double cy,
+                      V3 cam, V3 Rv, V3 U, V3 F, double& depth) const override;
 };
