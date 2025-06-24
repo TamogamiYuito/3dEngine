@@ -40,6 +40,10 @@ struct Cube : public IHoverable {
     Quat q{1,0,0,0};
     V3 s{ 1,1,1 };
 
+    Cube() = default;
+    Cube(V3 pos, Quat rot = {1,0,0,0}, V3 scale = {1,1,1})
+        : c(pos), q(rot), s(scale) {}
+
     bool checkHovered(const s3d::Vec2& cur, double cx, double cy,
                       V3 cam, V3 Rv, V3 U, V3 F, double& depth) const override;
 };
