@@ -43,6 +43,123 @@ int Game::detectHoveredCube(const Vec2& cur, double cx, double cy) {
                 hover = static_cast<int>(i);
             }
         }
+        else if (free && lightSel != -1 && !KeyAlt.pressed()) {
+            const Light& lt = lights[lightSel];
+            const double L = HALF * std::max({ lt.s.x, lt.s.y, lt.s.z }) * 1.5;
+            P2 ctr = scr(lt.c);
+            if (!std::isinf(ctr.x) && (mode == Mode::Move || mode == Mode::Scale)) {
+                struct Ax { V3 d; Color col; Handle mv, sc; };
+                const Ax AX[3] = {
+                    { {1,0,0}, Palette::Red,   Handle::MoveX, Handle::ScaleX },
+                    { {0,1,0}, Palette::Green, Handle::MoveY, Handle::ScaleY },
+                    { {0,0,1}, Palette::Blue,  Handle::MoveZ, Handle::ScaleZ }
+                };
+                double bestA = 1e9;
+                for (const auto& a : AX) {
+                    V3 dir = (mode == Mode::Scale) ? qRotate(lt.q, a.d) : a.d;
+                    double sc = (a.d.x != 0) ? lt.s.x : (a.d.y != 0) ? lt.s.y : lt.s.z;
+                    P2 tip = scr(lt.c + dir * (HALF * 1.5 * sc));
+                    if (std::isinf(tip.x)) continue;
+                    double dLine = segDist2(cur, { ctr.x,ctr.y }, { tip.x,tip.y });
+                    double dTip = (cur - Vec2{ tip.x,tip.y }).lengthSq();
+                    if (mode == Mode::Move && dLine < 64 && dLine < bestA) {
+                        bestA = dLine; hoverHd = a.mv;
+                    }
+                    else if (mode == Mode::Scale) {
+                        if (dTip < 64 && dTip < bestA) {
+                            bestA = dTip; hoverHd = a.sc;
+                        }
+                        else if (dLine < 64 && dLine < bestA) {
+                            bestA = dLine; hoverHd = a.sc;
+                        }
+                    }
+                }
+                if (mode == Mode::Scale && (cur - Vec2{ ctr.x,ctr.y }).lengthSq() < 64)
+                    hoverHd = Handle::ScaleUniform;
+            }
+            if (mode == Mode::Rotate && !std::isinf(ctr.x)) {
+                struct Ring { Handle hd; Color col; };
+                const Ring RG[3] = {
+                    { Handle::RotateX, Palette::Red },
+                    { Handle::RotateY, Palette::Green },
+                    { Handle::RotateZ, Palette::Blue }
+                };
+                constexpr int SEG = 64;
+                for (auto r : RG) {
+                    V3 axLocal = (r.hd == Handle::RotateX) ? V3{ 1,0,0 }
+                            : (r.hd == Handle::RotateY) ? V3{ 0,1,0 }
+                            : V3{ 0,0,1 };
+                    V3 ax = qRotate(lt.q, axLocal);
+                    double axF = dot(ax, F);
+                    double bestR = 1e9;
+                    if (std::abs(axF) > 0.9) {
+                        P2 sp = scr(lt.c);
+                        if (!std::isinf(sp.x)) {
+                            V3 dir = cross(ax, Rv);
+                            if (len(dir) < 1e-6) dir = cross(ax, U);
+                            dir = norm(dir);
+                            P2 tip = scr(lt.c + dir * L);
+                            if (!std::isinf(tip.x)) {
+                                double rpx = (Vec2{ tip.x,tip.y } - Vec2{ sp.x,sp.y }).length();
+                                bestR = std::abs((cur - Vec2{ sp.x,sp.y }).length() - rpx);
+                            }
+                        }
+                    } else {
+                        for (int k = 0; k < SEG; ++k) {
+                            double a0 = Math::TwoPi * k / SEG,
+                                   a1 = Math::TwoPi * (k + 1) / SEG;
+                            V3 p0, p1;
+                            if (r.hd == Handle::RotateX) {
+                                p0 = qRotate(lt.q, { 0,std::sin(a0) * L,std::cos(a0) * L });
+                                p1 = qRotate(lt.q, { 0,std::sin(a1) * L,std::cos(a1) * L });
+                            } else if (r.hd == Handle::RotateY) {
+                                p0 = qRotate(lt.q, { std::sin(a0) * L,0,std::cos(a0) * L });
+                                p1 = qRotate(lt.q, { std::sin(a1) * L,0,std::cos(a1) * L });
+                            } else {
+                                p0 = qRotate(lt.q, { std::sin(a0) * L,std::cos(a0) * L,0 });
+                                p1 = qRotate(lt.q, { std::sin(a1) * L,std::cos(a1) * L,0 });
+                            }
+                            P2 s0 = scr(lt.c + p0), s1 = scr(lt.c + p1);
+                            if (std::isinf(s0.x) || std::isinf(s1.x)) continue;
+                            bestR = std::min(bestR, segDist2(cur, {s0.x,s0.y }, { s1.x,s1.y }));
+                        }
+                    }
+                    if (bestR < 64) { hoverHd = r.hd; break; }
+                }
+            }
+        }
+    }
+    return hover;
+}
+
+int Game::detectHoveredLight(const Vec2& cur, double cx, double cy) {
+    V3 cam = camera.cam;
+    V3 Rv = camera.right();
+    V3 U  = camera.up();
+    V3 F  = camera.forward();
+    auto scr = [&](V3 w) { return screenProject(w, cam, Rv, U, F, cx, cy); };
+
+    int hover = -1; double bestDepth = 1e9;
+    for (size_t i = 0; i < lights.size(); ++i) {
+        const Light& lt = lights[i];
+        double minX = 1e9, minY = 1e9;
+        double maxX = -1e9, maxY = -1e9;
+        bool any = false;
+        for (int k = 0; k < 8; ++k) {
+            P2 p = scr(lt.c + qRotate(lt.q, LOCAL[k] * lt.s));
+            if (std::isinf(p.x)) continue;
+            any = true;
+            minX = std::min(minX, p.x); maxX = std::max(maxX, p.x);
+            minY = std::min(minY, p.y); maxY = std::max(maxY, p.y);
+        }
+        if (!any) continue;
+        if (cur.x >= minX && cur.x <= maxX && cur.y >= minY && cur.y <= maxY) {
+            double depth = len(lt.c - cam);
+            if (depth < bestDepth) {
+                bestDepth = depth;
+                hover = static_cast<int>(i);
+            }
+        }
     }
     return hover;
 }
@@ -166,7 +283,15 @@ void Game::run() {
 
         if (free && SimpleGUI::Button(U"+ Light", { 20,50 })) {
             Light lt;
-            lt.dir = F; // shine toward where the camera faces
+            lt.c = cam + F * 100.0;
+            V3 from{0,-1,0};
+            V3 to = norm(F);
+            double cosA = dot(from, to);
+            if (cosA > 1.0) cosA = 1.0; if (cosA < -1.0) cosA = -1.0;
+            V3 axis = cross(from, to);
+            if (len(axis) < 1e-6) axis = {1,0,0};
+            double angle = std::acos(cosA);
+            lt.q = qAxisAngle(axis, angle);
             lights.push_back(lt);
             lightSel = static_cast<int>(lights.size()) - 1;
         }
@@ -180,6 +305,7 @@ void Game::run() {
                 lights[lightSel].intensity = std::max(0.0, lights[lightSel].intensity - dt);
             if (KeyX.pressed())
                 lights[lightSel].intensity += dt;
+            SimpleGUI::Slider(U"Intensity", lights[lightSel].intensity, 0.0, 5.0, Vec2{20,80});
         }
 
         auto scr = [&](V3 w) { return screenProject(w, cam, Rv, U, F, WINF.x, WINF.y); };
@@ -193,6 +319,7 @@ void Game::run() {
         };
 
         hoverIdx = detectHoveredCube(cur, WINF.x, WINF.y);
+        hoverLightIdx = detectHoveredLight(cur, WINF.x, WINF.y);
         hoverHd = Handle::None;
         if (free && sel != -1 && !KeyAlt.pressed()) {
             const Cube& cb = cubes[sel];
@@ -281,16 +408,23 @@ void Game::run() {
         }
 
         if (free && MouseL.down()) {
-            if (hoverHd != Handle::None && sel != -1) {
+            if (hoverHd != Handle::None && (sel != -1 || lightSel != -1)) {
                 activeHd = hoverHd;
                 drag.on = true;
                 drag.cur0 = cur;
-                Cube& cb = cubes[sel];
-                drag.p0 = cb.c;
-                drag.q0 = cb.q;
-                drag.s0 = cb.s;
-                if (activeHd == Handle::MoveX || activeHd == Handle::MoveZ)
-                    grid.erase({ gIdx(cb.c.x), gIdx(cb.c.z) });
+                if (sel != -1) {
+                    Cube& cb = cubes[sel];
+                    drag.p0 = cb.c;
+                    drag.q0 = cb.q;
+                    drag.s0 = cb.s;
+                    if (activeHd == Handle::MoveX || activeHd == Handle::MoveZ)
+                        grid.erase({ gIdx(cb.c.x), gIdx(cb.c.z) });
+                } else {
+                    Light& lt = lights[lightSel];
+                    drag.p0 = lt.c;
+                    drag.q0 = lt.q;
+                    drag.s0 = lt.s;
+                }
                 if (activeHd == Handle::MoveX || activeHd == Handle::MoveY
                  || activeHd == Handle::MoveZ || activeHd == Handle::ScaleX
                  || activeHd == Handle::ScaleY || activeHd == Handle::ScaleZ) {
@@ -298,8 +432,8 @@ void Game::run() {
                                  (activeHd == Handle::MoveY || activeHd == Handle::ScaleY) ? V3{ 0,1,0 } :
                                  V3{ 0,0,1 };
                     V3 ax = (activeHd == Handle::ScaleX || activeHd == Handle::ScaleY || activeHd == Handle::ScaleZ)
-                        ? qRotate(cb.q, axLocal) : axLocal;
-                    P2 p0 = scr(cb.c), p1 = scr(cb.c + ax);
+                        ? qRotate(drag.q0, axLocal) : axLocal;
+                    P2 p0 = scr(drag.p0), p1 = scr(drag.p0 + ax);
                     drag.lenPx = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).length();
                     if (drag.lenPx < 1) drag.lenPx = 1;
                 }
@@ -307,16 +441,20 @@ void Game::run() {
                     V3 axLocal = (activeHd == Handle::RotateX) ? V3{ 1,0,0 }
                             : (activeHd == Handle::RotateY) ? V3{ 0,1,0 }
                             : V3{ 0,0,1 };
-                    drag.axis = qRotate(cb.q, axLocal);
-                    drag.ang0 = cursorAngle(cur, drag.axis, cb.c).value_or(0.0);
+                    drag.axis = qRotate(drag.q0, axLocal);
+                    drag.ang0 = cursorAngle(cur, drag.axis, drag.p0).value_or(0.0);
                 }
             } else if (hoverIdx != -1) {
                 sel = hoverIdx;
+                lightSel = -1;
+            } else if (hoverLightIdx != -1) {
+                lightSel = hoverLightIdx;
+                sel = -1;
             }
         }
 
         if (free && MouseL.up()) {
-            if (drag.on && (activeHd == Handle::MoveX || activeHd == Handle::MoveZ)) {
+            if (drag.on && sel != -1 && (activeHd == Handle::MoveX || activeHd == Handle::MoveZ)) {
                 Cube& cb = cubes[sel];
                 grid.insert({ gIdx(cb.c.x), gIdx(cb.c.z) });
             }
@@ -324,9 +462,10 @@ void Game::run() {
         }
 
         /*--- ドラッグ処理 ---*/
-        if (drag.on && sel != -1) {
+        if (drag.on && (sel != -1 || lightSel != -1)) {
             Vec2 d = cur - drag.cur0;
-            Cube& cb = cubes[sel];
+            auto& obj = (sel != -1) ? *reinterpret_cast<Cube*>(&cubes[sel])
+                                   : *reinterpret_cast<Cube*>(&lights[lightSel]);
 
             /* Move */
             if (activeHd == Handle::MoveX || activeHd == Handle::MoveY || activeHd == Handle::MoveZ) {
@@ -336,16 +475,16 @@ void Game::run() {
                 Vec2 dir = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).normalized();
                 double pix = Dot(d, dir);
                 double world = (pix / drag.lenPx) * 40.0;   // 1px = 40 world
-                cb.c = drag.p0 + ax * world;
+                obj.c = drag.p0 + ax * world;
             }
             /* Rotate: apply cursor angle difference */
             else if (activeHd == Handle::RotateX || activeHd == Handle::RotateY || activeHd == Handle::RotateZ) {
-                if (auto ang = cursorAngle(cur, drag.axis, cb.c)) {
+                if (auto ang = cursorAngle(cur, drag.axis, drag.p0)) {
                     double delta = *ang - drag.ang0;
                     if (delta > s3d::Math::Pi)      delta -= s3d::Math::TwoPi;
                     if (delta < -s3d::Math::Pi)     delta += s3d::Math::TwoPi;
                     Quat dq = qAxisAngle(drag.axis, delta);
-                    cb.q = qNormalize(qMul(dq, drag.q0));
+                    obj.q = qNormalize(qMul(dq, drag.q0));
                 }
             }
             /* Scale */
@@ -353,7 +492,7 @@ void Game::run() {
                 V3 axLocal = (activeHd == Handle::ScaleX) ? V3{1,0,0}
                                 : (activeHd == Handle::ScaleY) ? V3{0,1,0}
                                 : V3{0,0,1};
-                V3 ax = qRotate(cb.q, axLocal);
+                V3 ax = qRotate(drag.q0, axLocal);
                 P2 p0 = scr(drag.p0), p1 = scr(drag.p0 + ax);
                 Vec2 dir = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).normalized();
                 double pix = Dot(d, dir);
@@ -362,14 +501,14 @@ void Game::run() {
                 if (activeHd == Handle::ScaleX) s.x = Clamp(s.x * f, 0.1, 5.0);
                 else if (activeHd == Handle::ScaleY) s.y = Clamp(s.y * f, 0.1, 5.0);
                 else s.z = Clamp(s.z * f, 0.1, 5.0);
-                cb.s = s;
+                obj.s = s;
             } else {
                 /* ScaleUniform */
                 V3 f = drag.s0 * (1.0 + d.x * 0.002);
                 f.x = Clamp(f.x, 0.1, 5.0);
                 f.y = Clamp(f.y, 0.1, 5.0);
                 f.z = Clamp(f.z, 0.1, 5.0);
-                cb.s = f;
+                obj.s = f;
             }
         }
 
@@ -422,7 +561,7 @@ void Game::run() {
                                 V3 center = (v0 + v1 + v2 + v3) / 4.0;
                                 double shade = 0.0;
                                 for (const auto& lt : lights) {
-                                    V3 L = -norm(lt.dir);
+                                    V3 L = -norm(lt.dir());
                                     shade += lt.intensity * std::max(0.0, dot(nW, L));
                                 }
                                 shade = std::min(shade, 1.0);
@@ -467,9 +606,97 @@ void Game::run() {
             return !a.selected && b.selected;
         });
 
+        /*--- Lights ---*/
+        for (size_t i = 0; i < lights.size(); ++i) {
+            const Light& lt = lights[i];
+            P2 a = scr(lt.c);
+            P2 b = scr(lt.c + lt.dir() * 60.0);
+            if (std::isinf(a.x) || std::isinf(b.x)) continue;
+            ColorF c = (static_cast<int>(i) == lightSel) ? ColorF(Palette::Yellow) : ColorF(Palette::White);
+            Line{ a.x,a.y, b.x,b.y }.draw(3, c);
+            Vec2 v = (Vec2{ b.x,b.y } - Vec2{ a.x,a.y }).normalized() * 6;
+            Vec2 n{ -v.y, v.x };
+            Polygon{ Vec2{b.x,b.y}, Vec2{b.x,b.y}-v*2+n, Vec2{b.x,b.y}-v*2-n }.draw(c);
+        }
+
         /*--- ギズモ ---*/
         if (free && sel != -1) {
             const Cube& cb = cubes[sel];
+            const double L = HALF * std::max({ cb.s.x, cb.s.y, cb.s.z }) * 1.5;
+            P2 ctr = scr(cb.c); if (std::isinf(ctr.x)) continue;
+
+            /* Move / Scale */
+            if (mode == Mode::Move || mode == Mode::Scale) {
+                struct Ax { V3 d; Color col; Handle mv, sc; };
+                const Ax AX[3] = {
+                    { {1,0,0}, Palette::Red,   Handle::MoveX, Handle::ScaleX },
+                    { {0,1,0}, Palette::Green, Handle::MoveY, Handle::ScaleY },
+                    { {0,0,1}, Palette::Blue,  Handle::MoveZ, Handle::ScaleZ }
+                };
+                for (const auto& a : AX) {
+                    V3 dir = (mode == Mode::Scale) ? qRotate(cb.q, a.d) : a.d;
+                    double sc = (a.d.x != 0) ? cb.s.x : (a.d.y != 0) ? cb.s.y : cb.s.z;
+                    P2 tip = scr(cb.c + dir * (HALF * 1.5 * sc)); if (std::isinf(tip.x)) continue;
+                    bool hot = (hoverHd == a.mv || hoverHd == a.sc
+                                 || activeHd == a.mv || activeHd == a.sc);
+
+                    ColorF c = a.col; c.a = hot ? 1.0 : 0.4;
+                    Line{ ctr.x,ctr.y, tip.x,tip.y }.draw(hot ? 4 : 3, c);
+
+                    if (mode == Mode::Move) {
+                        Vec2 v2 = (Vec2{ tip.x,tip.y } - Vec2{ ctr.x,ctr.y }).normalized() * 8;
+                        Vec2 n{ -v2.y,v2.x };
+                        Polygon{ Vec2{tip.x,tip.y},
+                                 Vec2{tip.x,tip.y} - v2 * 2 + n,
+                                 Vec2{tip.x,tip.y} - v2 * 2 - n }.draw(c);
+                    } else /* Scale */ {
+                        RectF{ tip.x - 4, tip.y - 4, 8,8 }.draw(c);
+                    }
+                }
+                if (mode == Mode::Scale) {
+                    bool hot = (hoverHd == Handle::ScaleUniform
+                                || activeHd == Handle::ScaleUniform);
+                    ColorF cu = hot ? ColorF(Palette::White)
+                                    : ColorF{ 1,1,1,0.4 };
+                    Circle{ ctr.x,ctr.y,5 }.drawFrame(2, cu);
+                }
+            }
+
+            /* Rotate */
+            if (mode == Mode::Rotate) {
+                struct Ring { Handle hd; Color col; };
+                const Ring RG[3] = {
+                    { Handle::RotateX, Palette::Red   },
+                    { Handle::RotateY, Palette::Green },
+                    { Handle::RotateZ, Palette::Blue  }
+                };
+                constexpr int SEG = 64;
+                for (auto r : RG) {
+                    bool hot = (hoverHd == r.hd || activeHd == r.hd);
+                    ColorF col = r.col; col.a = hot ? 1.0 : 0.4;
+                    for (int k = 0; k < SEG; ++k) {
+                        double a0 = Math::TwoPi * k / SEG,
+                               a1 = Math::TwoPi * (k + 1) / SEG;
+                        V3 p0, p1;
+                        if (r.hd == Handle::RotateX) {
+                            p0 = qRotate(cb.q, { 0,std::sin(a0) * L,std::cos(a0) * L });
+                            p1 = qRotate(cb.q, { 0,std::sin(a1) * L,std::cos(a1) * L });
+                        } else if (r.hd == Handle::RotateY) {
+                            p0 = qRotate(cb.q, { std::sin(a0) * L,0,std::cos(a0) * L });
+                            p1 = qRotate(cb.q, { std::sin(a1) * L,0,std::cos(a1) * L });
+                        } else {
+                            p0 = qRotate(cb.q, { std::sin(a0) * L,std::cos(a0) * L,0 });
+                            p1 = qRotate(cb.q, { std::sin(a1) * L,std::cos(a1) * L,0 });
+                        }
+                        P2 s0 = scr(cb.c + p0), s1 = scr(cb.c + p1);
+                        if (!std::isinf(s0.x) && !std::isinf(s1.x))
+                            Line{ s0.x,s0.y, s1.x,s1.y }.draw(hot ? 3 : 2, col);
+                    }
+                }
+            }
+        }
+        else if (free && lightSel != -1) {
+            const Light& cb = lights[lightSel];
             const double L = HALF * std::max({ cb.s.x, cb.s.y, cb.s.z }) * 1.5;
             P2 ctr = scr(cb.c); if (std::isinf(ctr.x)) continue;
 
