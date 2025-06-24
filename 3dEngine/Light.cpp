@@ -1,12 +1,9 @@
-#include "Cube.hpp"
+#include "Light.hpp"
 #include "RenderUtils.hpp"
 #include <cmath>
 
-int gIdx(double v) { return (int)std::round(v / (2 * HALF)); }
-double gPos(int g) { return g * 2.0 * HALF; }
-
-bool Cube::checkHovered(const s3d::Vec2& cur, double cx, double cy,
-                        V3 cam, V3 Rv, V3 U, V3 F, double& depth) const {
+bool Light::checkHovered(const s3d::Vec2& cur, double cx, double cy,
+                         V3 cam, V3 Rv, V3 U, V3 F, double& depth) const {
     auto scr = [&](V3 w) { return screenProject(w, cam, Rv, U, F, cx, cy); };
     double minX = 1e9, minY = 1e9;
     double maxX = -1e9, maxY = -1e9;

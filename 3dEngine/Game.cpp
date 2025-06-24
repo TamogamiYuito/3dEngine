@@ -20,24 +20,11 @@ int Game::detectHoveredCube(const Vec2& cur, double cx, double cy) {
     V3 Rv = camera.right();
     V3 U  = camera.up();
     V3 F  = camera.forward();
-    auto scr = [&](V3 w) { return screenProject(w, cam, Rv, U, F, cx, cy); };
 
     int hover = -1; double bestDepth = 1e9;
     for (size_t i = 0; i < cubes.size(); ++i) {
-        const Cube& cb = cubes[i];
-        double minX = 1e9, minY = 1e9;
-        double maxX = -1e9, maxY = -1e9;
-        bool any = false;
-        for (int k = 0; k < 8; ++k) {
-            P2 p = scr(cb.c + qRotate(cb.q, LOCAL[k] * cb.s));
-            if (std::isinf(p.x)) continue;
-            any = true;
-            minX = std::min(minX, p.x); maxX = std::max(maxX, p.x);
-            minY = std::min(minY, p.y); maxY = std::max(maxY, p.y);
-        }
-        if (!any) continue;
-        if (cur.x >= minX && cur.x <= maxX && cur.y >= minY && cur.y <= maxY) {
-            double depth = len(cb.c - cam);
+        double depth = 1e9;
+        if (cubes[i].checkHovered(cur, cx, cy, cam, Rv, U, F, depth)) {
             if (depth < bestDepth) {
                 bestDepth = depth;
                 hover = static_cast<int>(i);
@@ -48,34 +35,22 @@ int Game::detectHoveredCube(const Vec2& cur, double cx, double cy) {
 }
 
 int Game::detectHoveredLight(const Vec2& cur, double cx, double cy, bool free) {
-	V3 cam = camera.cam;
-	V3 Rv = camera.right();
-	V3 U = camera.up();
-	V3 F = camera.forward();
-	auto scr = [&](V3 w) { return screenProject(w, cam, Rv, U, F, cx, cy); };
+        V3 cam = camera.cam;
+        V3 Rv = camera.right();
+        V3 U = camera.up();
+        V3 F = camera.forward();
+        auto scr = [&](V3 w) { return screenProject(w, cam, Rv, U, F, cx, cy); };
 
-	int hover = -1; double bestDepth = 1e9;
-	for (size_t i = 0; i < lights.size(); ++i) {
-		const Light& lt = lights[i];
-		double minX = 1e9, minY = 1e9;
-		double maxX = -1e9, maxY = -1e9;
-		bool any = false;
-		for (int k = 0; k < 8; ++k) {
-			P2 p = scr(lt.c + qRotate(lt.q, LOCAL[k] * lt.s));
-			if (std::isinf(p.x)) continue;
-			any = true;
-			minX = std::min(minX, p.x); maxX = std::max(maxX, p.x);
-			minY = std::min(minY, p.y); maxY = std::max(maxY, p.y);
-		}
-		if (!any) continue;
-		if (cur.x >= minX && cur.x <= maxX && cur.y >= minY && cur.y <= maxY) {
-			double depth = len(lt.c - cam);
-			if (depth < bestDepth) {
-				bestDepth = depth;
-				hover = static_cast<int>(i);
-			}
-		}
-	}
+        int hover = -1; double bestDepth = 1e9;
+        for (size_t i = 0; i < lights.size(); ++i) {
+                double depth = 1e9;
+                if (lights[i].checkHovered(cur, cx, cy, cam, Rv, U, F, depth)) {
+                        if (depth < bestDepth) {
+                                bestDepth = depth;
+                                hover = static_cast<int>(i);
+                        }
+                }
+        }
 
 	if (free && lightSel != -1 && !KeyAlt.pressed()) {
 		const Light& lt = lights[lightSel];

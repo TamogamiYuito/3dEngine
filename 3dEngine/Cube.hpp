@@ -3,6 +3,7 @@
 #include <unordered_set>
 #include <cmath>
 #include "Math.hpp"
+#include "IHoverable.hpp"
 
 constexpr std::array<V3, 8> LOCAL{ {
     {-HALF,-HALF,-HALF},{ HALF,-HALF,-HALF},
@@ -34,8 +35,11 @@ struct GHash {
 int    gIdx(double v);
 double gPos(int g);
 
-struct Cube {
+struct Cube : public IHoverable {
     V3 c;
     Quat q{1,0,0,0};
     V3 s{ 1,1,1 };
+
+    bool checkHovered(const s3d::Vec2& cur, double cx, double cy,
+                      V3 cam, V3 Rv, V3 U, V3 F, double& depth) const override;
 };
