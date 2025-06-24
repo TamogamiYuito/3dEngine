@@ -166,7 +166,7 @@ void Game::run() {
 
         if (free && SimpleGUI::Button(U"+ Light", { 20,50 })) {
             Light lt;
-            lt.pos = cam + F * (2.0 * HALF);
+            lt.dir = F; // shine toward where the camera faces
             lights.push_back(lt);
             lightSel = static_cast<int>(lights.size()) - 1;
         }
@@ -176,15 +176,10 @@ void Game::run() {
         }
 
         if (free && lightSel != -1) {
-            V3 move{0,0,0};
-            if (KeyUp.pressed())    move = move + Fh;
-            if (KeyDown.pressed())  move = move - Fh;
-            if (KeyRight.pressed()) move = move + Rv;
-            if (KeyLeft.pressed())  move = move - Rv;
-            if (KeyPageUp.pressed())   move.y += 1.0;
-            if (KeyPageDown.pressed()) move.y -= 1.0;
-            if (move.x != 0 || move.y != 0 || move.z != 0)
-                lights[lightSel].pos = lights[lightSel].pos + MOVE * dt * move;
+            if (KeyZ.pressed())
+                lights[lightSel].intensity = std::max(0.0, lights[lightSel].intensity - dt);
+            if (KeyX.pressed())
+                lights[lightSel].intensity += dt;
         }
 
         auto scr = [&](V3 w) { return screenProject(w, cam, Rv, U, F, WINF.x, WINF.y); };
@@ -427,7 +422,7 @@ void Game::run() {
                                 V3 center = (v0 + v1 + v2 + v3) / 4.0;
                                 double shade = 0.0;
                                 for (const auto& lt : lights) {
-                                    V3 L = norm(lt.pos - center);
+                                    V3 L = -norm(lt.dir);
                                     shade += lt.intensity * std::max(0.0, dot(nW, L));
                                 }
                                 shade = std::min(shade, 1.0);
@@ -471,16 +466,6 @@ void Game::run() {
                 return a.d > b.d;
             return !a.selected && b.selected;
         });
-
-        for (size_t li = 0; li < lights.size(); ++li) {
-            P2 lp = scr(lights[li].pos);
-            if (!std::isinf(lp.x)) {
-                ColorF lc = (static_cast<int>(li) == lightSel) ? ColorF(Palette::Yellow) : ColorF{1,1,1};
-                Circle{ lp.x, lp.y, 6 }.draw(lc);
-            }
-        }
-
-
 
         /*--- ギズモ ---*/
         if (free && sel != -1) {
