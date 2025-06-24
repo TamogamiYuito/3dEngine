@@ -20,11 +20,13 @@ private:
     Mode   mode = Mode::Move;
     int    sel = -1;
     int    hoverIdx = -1;
+    int    hoverLightIdx = -1;
     Handle hoverHd = Handle::None;
     Handle activeHd = Handle::None;
     Drag   drag;
 
     int detectHoveredCube(const s3d::Vec2& cur, double cx, double cy);
+    int detectHoveredLight(const s3d::Vec2& cur, double cx, double cy);
     void handleFPSMovement(double dt);
     GKey findNearestEmpty(GKey start);
 };
