@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "Math.hpp"
 #include "IHoverable.hpp"
+#include "Cube.hpp"
 
 struct Light : public IHoverable {
     // Center position of the light gizmo
