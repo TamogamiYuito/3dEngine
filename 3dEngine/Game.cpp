@@ -609,14 +609,31 @@ void Game::run() {
         /*--- Lights ---*/
         for (size_t i = 0; i < lights.size(); ++i) {
             const Light& lt = lights[i];
+
+            // Compute projected vertices of the light gizmo cube
+            std::array<P2, 8> vp;
+            for (int k = 0; k < 8; ++k) {
+                V3 p = qRotate(lt.q, LOCAL[k] * lt.s);
+                vp[k] = scr(lt.c + p);
+            }
+
+            // Draw cube edges for better visibility
+            ColorF col = (static_cast<int>(i) == lightSel) ? ColorF(Palette::Yellow)
+                                                           : ColorF(Palette::White);
+            for (auto [a, b] : EDGE) {
+                if (std::isinf(vp[a].x) || std::isinf(vp[b].x)) continue;
+                Line{ vp[a].x, vp[a].y, vp[b].x, vp[b].y }.draw(2, col);
+            }
+
+            // Draw direction arrow
             P2 a = scr(lt.c);
             P2 b = scr(lt.c + lt.dir() * 60.0);
-            if (std::isinf(a.x) || std::isinf(b.x)) continue;
-            ColorF c = (static_cast<int>(i) == lightSel) ? ColorF(Palette::Yellow) : ColorF(Palette::White);
-            Line{ a.x,a.y, b.x,b.y }.draw(3, c);
-            Vec2 v = (Vec2{ b.x,b.y } - Vec2{ a.x,a.y }).normalized() * 6;
-            Vec2 n{ -v.y, v.x };
-            Polygon{ Vec2{b.x,b.y}, Vec2{b.x,b.y}-v*2+n, Vec2{b.x,b.y}-v*2-n }.draw(c);
+            if (!std::isinf(a.x) && !std::isinf(b.x)) {
+                Line{ a.x,a.y, b.x,b.y }.draw(3, col);
+                Vec2 v = (Vec2{ b.x,b.y } - Vec2{ a.x,a.y }).normalized() * 6;
+                Vec2 n{ -v.y, v.x };
+                Polygon{ Vec2{b.x,b.y}, Vec2{b.x,b.y}-v*2+n, Vec2{b.x,b.y}-v*2-n }.draw(col);
+            }
         }
 
         /*--- ギズモ ---*/
