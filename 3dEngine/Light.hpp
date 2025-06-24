@@ -11,6 +11,8 @@ struct Light {
     // Light intensity (brightness)
     double intensity = 1.0;
 
+	double range = 200.0;
+
     // Get the light direction from the orientation
     V3 dir() const { return qRotate(q, { 0,-1,0 }); }
 };

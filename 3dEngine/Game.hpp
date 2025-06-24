@@ -26,7 +26,7 @@ private:
     Drag   drag;
 
     int detectHoveredCube(const s3d::Vec2& cur, double cx, double cy);
-    int detectHoveredLight(const s3d::Vec2& cur, double cx, double cy);
+    int detectHoveredLight(const Vec2& cur, double cx, double cy, bool free);
     void handleFPSMovement(double dt);
     GKey findNearestEmpty(GKey start);
 };
