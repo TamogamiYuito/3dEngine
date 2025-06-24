@@ -561,7 +561,7 @@ void Game::run() {
                                 V3 center = (v0 + v1 + v2 + v3) / 4.0;
                                 double shade = 0.0;
                                 for (const auto& lt : lights) {
-                                    V3 L = -norm(lt.dir());
+                                    V3 L = norm(lt.dir());
                                     shade += lt.intensity * std::max(0.0, dot(nW, L));
                                 }
                                 shade = std::min(shade, 1.0);
