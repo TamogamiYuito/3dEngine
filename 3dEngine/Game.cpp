@@ -43,91 +43,6 @@ int Game::detectHoveredCube(const Vec2& cur, double cx, double cy) {
                 hover = static_cast<int>(i);
             }
         }
-        else if (free && lightSel != -1 && !KeyAlt.pressed()) {
-            const Light& lt = lights[lightSel];
-            const double L = HALF * std::max({ lt.s.x, lt.s.y, lt.s.z }) * 1.5;
-            P2 ctr = scr(lt.c);
-            if (!std::isinf(ctr.x) && (mode == Mode::Move || mode == Mode::Scale)) {
-                struct Ax { V3 d; Color col; Handle mv, sc; };
-                const Ax AX[3] = {
-                    { {1,0,0}, Palette::Red,   Handle::MoveX, Handle::ScaleX },
-                    { {0,1,0}, Palette::Green, Handle::MoveY, Handle::ScaleY },
-                    { {0,0,1}, Palette::Blue,  Handle::MoveZ, Handle::ScaleZ }
-                };
-                double bestA = 1e9;
-                for (const auto& a : AX) {
-                    V3 dir = (mode == Mode::Scale) ? qRotate(lt.q, a.d) : a.d;
-                    double sc = (a.d.x != 0) ? lt.s.x : (a.d.y != 0) ? lt.s.y : lt.s.z;
-                    P2 tip = scr(lt.c + dir * (HALF * 1.5 * sc));
-                    if (std::isinf(tip.x)) continue;
-                    double dLine = segDist2(cur, { ctr.x,ctr.y }, { tip.x,tip.y });
-                    double dTip = (cur - Vec2{ tip.x,tip.y }).lengthSq();
-                    if (mode == Mode::Move && dLine < 64 && dLine < bestA) {
-                        bestA = dLine; hoverHd = a.mv;
-                    }
-                    else if (mode == Mode::Scale) {
-                        if (dTip < 64 && dTip < bestA) {
-                            bestA = dTip; hoverHd = a.sc;
-                        }
-                        else if (dLine < 64 && dLine < bestA) {
-                            bestA = dLine; hoverHd = a.sc;
-                        }
-                    }
-                }
-                if (mode == Mode::Scale && (cur - Vec2{ ctr.x,ctr.y }).lengthSq() < 64)
-                    hoverHd = Handle::ScaleUniform;
-            }
-            if (mode == Mode::Rotate && !std::isinf(ctr.x)) {
-                struct Ring { Handle hd; Color col; };
-                const Ring RG[3] = {
-                    { Handle::RotateX, Palette::Red },
-                    { Handle::RotateY, Palette::Green },
-                    { Handle::RotateZ, Palette::Blue }
-                };
-                constexpr int SEG = 64;
-                for (auto r : RG) {
-                    V3 axLocal = (r.hd == Handle::RotateX) ? V3{ 1,0,0 }
-                            : (r.hd == Handle::RotateY) ? V3{ 0,1,0 }
-                            : V3{ 0,0,1 };
-                    V3 ax = qRotate(lt.q, axLocal);
-                    double axF = dot(ax, F);
-                    double bestR = 1e9;
-                    if (std::abs(axF) > 0.9) {
-                        P2 sp = scr(lt.c);
-                        if (!std::isinf(sp.x)) {
-                            V3 dir = cross(ax, Rv);
-                            if (len(dir) < 1e-6) dir = cross(ax, U);
-                            dir = norm(dir);
-                            P2 tip = scr(lt.c + dir * L);
-                            if (!std::isinf(tip.x)) {
-                                double rpx = (Vec2{ tip.x,tip.y } - Vec2{ sp.x,sp.y }).length();
-                                bestR = std::abs((cur - Vec2{ sp.x,sp.y }).length() - rpx);
-                            }
-                        }
-                    } else {
-                        for (int k = 0; k < SEG; ++k) {
-                            double a0 = Math::TwoPi * k / SEG,
-                                   a1 = Math::TwoPi * (k + 1) / SEG;
-                            V3 p0, p1;
-                            if (r.hd == Handle::RotateX) {
-                                p0 = qRotate(lt.q, { 0,std::sin(a0) * L,std::cos(a0) * L });
-                                p1 = qRotate(lt.q, { 0,std::sin(a1) * L,std::cos(a1) * L });
-                            } else if (r.hd == Handle::RotateY) {
-                                p0 = qRotate(lt.q, { std::sin(a0) * L,0,std::cos(a0) * L });
-                                p1 = qRotate(lt.q, { std::sin(a1) * L,0,std::cos(a1) * L });
-                            } else {
-                                p0 = qRotate(lt.q, { std::sin(a0) * L,std::cos(a0) * L,0 });
-                                p1 = qRotate(lt.q, { std::sin(a1) * L,std::cos(a1) * L,0 });
-                            }
-                            P2 s0 = scr(lt.c + p0), s1 = scr(lt.c + p1);
-                            if (std::isinf(s0.x) || std::isinf(s1.x)) continue;
-                            bestR = std::min(bestR, segDist2(cur, {s0.x,s0.y }, { s1.x,s1.y }));
-                        }
-                    }
-                    if (bestR < 64) { hoverHd = r.hd; break; }
-                }
-            }
-        }
     }
     return hover;
 }
@@ -158,6 +73,92 @@ int Game::detectHoveredLight(const Vec2& cur, double cx, double cy) {
             if (depth < bestDepth) {
                 bestDepth = depth;
                 hover = static_cast<int>(i);
+            }
+        }
+    }
+
+    if (free && lightSel != -1 && !KeyAlt.pressed()) {
+        const Light& lt = lights[lightSel];
+        const double L = HALF * std::max({ lt.s.x, lt.s.y, lt.s.z }) * 1.5;
+        P2 ctr = scr(lt.c);
+        if (!std::isinf(ctr.x) && (mode == Mode::Move || mode == Mode::Scale)) {
+            struct Ax { V3 d; Color col; Handle mv, sc; };
+            const Ax AX[3] = {
+                { {1,0,0}, Palette::Red,   Handle::MoveX, Handle::ScaleX },
+                { {0,1,0}, Palette::Green, Handle::MoveY, Handle::ScaleY },
+                { {0,0,1}, Palette::Blue,  Handle::MoveZ, Handle::ScaleZ }
+            };
+            double bestA = 1e9;
+            for (const auto& a : AX) {
+                V3 dir = (mode == Mode::Scale) ? qRotate(lt.q, a.d) : a.d;
+                double sc = (a.d.x != 0) ? lt.s.x : (a.d.y != 0) ? lt.s.y : lt.s.z;
+                P2 tip = scr(lt.c + dir * (HALF * 1.5 * sc));
+                if (std::isinf(tip.x)) continue;
+                double dLine = segDist2(cur, { ctr.x,ctr.y }, { tip.x,tip.y });
+                double dTip = (cur - Vec2{ tip.x,tip.y }).lengthSq();
+                if (mode == Mode::Move && dLine < 64 && dLine < bestA) {
+                    bestA = dLine; hoverHd = a.mv;
+                }
+                else if (mode == Mode::Scale) {
+                    if (dTip < 64 && dTip < bestA) {
+                        bestA = dTip; hoverHd = a.sc;
+                    }
+                    else if (dLine < 64 && dLine < bestA) {
+                        bestA = dLine; hoverHd = a.sc;
+                    }
+                }
+            }
+            if (mode == Mode::Scale && (cur - Vec2{ ctr.x,ctr.y }).lengthSq() < 64)
+                hoverHd = Handle::ScaleUniform;
+        }
+        if (mode == Mode::Rotate && !std::isinf(ctr.x)) {
+            struct Ring { Handle hd; Color col; };
+            const Ring RG[3] = {
+                { Handle::RotateX, Palette::Red },
+                { Handle::RotateY, Palette::Green },
+                { Handle::RotateZ, Palette::Blue }
+            };
+            constexpr int SEG = 64;
+            for (auto r : RG) {
+                V3 axLocal = (r.hd == Handle::RotateX) ? V3{ 1,0,0 }
+                        : (r.hd == Handle::RotateY) ? V3{ 0,1,0 }
+                        : V3{ 0,0,1 };
+                V3 ax = qRotate(lt.q, axLocal);
+                double axF = dot(ax, F);
+                double bestR = 1e9;
+                if (std::abs(axF) > 0.9) {
+                    P2 sp = scr(lt.c);
+                    if (!std::isinf(sp.x)) {
+                        V3 dir = cross(ax, Rv);
+                        if (len(dir) < 1e-6) dir = cross(ax, U);
+                        dir = norm(dir);
+                        P2 tip = scr(lt.c + dir * L);
+                        if (!std::isinf(tip.x)) {
+                            double rpx = (Vec2{ tip.x,tip.y } - Vec2{ sp.x,sp.y }).length();
+                            bestR = std::abs((cur - Vec2{ sp.x,sp.y }).length() - rpx);
+                        }
+                    }
+                } else {
+                    for (int k = 0; k < SEG; ++k) {
+                        double a0 = Math::TwoPi * k / SEG,
+                               a1 = Math::TwoPi * (k + 1) / SEG;
+                        V3 p0, p1;
+                        if (r.hd == Handle::RotateX) {
+                            p0 = qRotate(lt.q, { 0,std::sin(a0) * L,std::cos(a0) * L });
+                            p1 = qRotate(lt.q, { 0,std::sin(a1) * L,std::cos(a1) * L });
+                        } else if (r.hd == Handle::RotateY) {
+                            p0 = qRotate(lt.q, { std::sin(a0) * L,0,std::cos(a0) * L });
+                            p1 = qRotate(lt.q, { std::sin(a1) * L,0,std::cos(a1) * L });
+                        } else {
+                            p0 = qRotate(lt.q, { std::sin(a0) * L,std::cos(a0) * L,0 });
+                            p1 = qRotate(lt.q, { std::sin(a1) * L,std::cos(a1) * L,0 });
+                        }
+                        P2 s0 = scr(lt.c + p0), s1 = scr(lt.c + p1);
+                        if (std::isinf(s0.x) || std::isinf(s1.x)) continue;
+                        bestR = std::min(bestR, segDist2(cur, {s0.x,s0.y }, { s1.x,s1.y }));
+                    }
+                }
+                if (bestR < 64) { hoverHd = r.hd; break; }
             }
         }
     }
