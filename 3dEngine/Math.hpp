@@ -87,3 +87,5 @@ inline V3 closestPointOBB(V3 p, V3 c, Quat q, V3 h) {
     double lz = std::clamp(dot(d, az), -h.z, h.z);
     return c + lx * ax + ly * ay + lz * az;
 }
+
+constexpr double SHADOW_PLANE_Y = -HALF;

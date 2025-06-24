@@ -333,6 +333,7 @@
     <ClInclude Include="Camera.hpp" />
     <ClInclude Include="Cube.hpp" />
     <ClInclude Include="Gizmo.hpp" />
+    <ClInclude Include="Light.hpp" />
     <ClInclude Include="Math.hpp" />
     <ClInclude Include="RenderUtils.hpp" />
     <ClInclude Include="stdafx.h" />
