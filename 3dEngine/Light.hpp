@@ -2,6 +2,8 @@
 #include "Math.hpp"
 
 struct Light {
-    V3     pos{ 0, 0, 0 };
+    // Direction from the light to the scene
+    V3     dir{ 0, -1, 0 };
+    // Light intensity (brightness)
     double intensity = 1.0;
 };
