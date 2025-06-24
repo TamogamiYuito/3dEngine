@@ -15,7 +15,8 @@ private:
     std::vector<Cube> cubes;
     std::unordered_set<GKey, GHash> grid;
     Camera camera;
-	Light  light;
+    std::vector<Light> lights;
+    int    lightSel = -1;
     Mode   mode = Mode::Move;
     int    sel = -1;
     int    hoverIdx = -1;

@@ -13,7 +13,6 @@ Game::Game() {
             grid.insert({ x, z });
         }
     }
-	light.direction = norm(V3{ -1, -1, -1 });
 }
 
 int Game::detectHoveredCube(const Vec2& cur, double cx, double cy) {
@@ -125,7 +124,7 @@ GKey Game::findNearestEmpty(GKey start) {
 }
 
 void Game::run() {
-    Scene::SetBackground(ColorF{ 0.92,0.95,1 });
+    Scene::SetBackground(ColorF{ 0,0,0 });
     const Vec2  WINF{ Scene::Width() * 0.5, Scene::Height() * 0.5 };
     const Point WINP{ (int32)WINF.x,(int32)WINF.y };
 
@@ -163,6 +162,29 @@ void Game::run() {
                 cubes.push_back({ { gPos(place.gx), yRand, gPos(place.gz) } });
                 grid.insert(place);
             }
+        }
+
+        if (free && SimpleGUI::Button(U"+ Light", { 20,50 })) {
+            Light lt;
+            lt.pos = cam + F * (2.0 * HALF);
+            lights.push_back(lt);
+            lightSel = static_cast<int>(lights.size()) - 1;
+        }
+
+        if (free && KeyTab.down() && !lights.empty()) {
+            lightSel = (lightSel + 1) % static_cast<int>(lights.size());
+        }
+
+        if (free && lightSel != -1) {
+            V3 move{0,0,0};
+            if (KeyUp.pressed())    move = move + Fh;
+            if (KeyDown.pressed())  move = move - Fh;
+            if (KeyRight.pressed()) move = move + Rv;
+            if (KeyLeft.pressed())  move = move - Rv;
+            if (KeyPageUp.pressed())   move.y += 1.0;
+            if (KeyPageDown.pressed()) move.y -= 1.0;
+            if (move.x != 0 || move.y != 0 || move.z != 0)
+                lights[lightSel].pos = lights[lightSel].pos + MOVE * dt * move;
         }
 
         auto scr = [&](V3 w) { return screenProject(w, cam, Rv, U, F, WINF.x, WINF.y); };
@@ -372,12 +394,10 @@ void Game::run() {
                   [](const auto& a, const auto& b) { return a.first > b.first; });
 
 
-		struct FaceDrawG { double d; std::array<P2,4> p; ColorF col; bool selected;};
-		struct ShadowDraw { std::array<P2, 4> p; };
+                struct FaceDrawG { double d; std::array<P2,4> p; ColorF col; bool selected;};
         struct EdgeDrawG { double d; P2 a, b; ColorF col; double th; bool selected;};
-		std::vector<FaceDrawG> faces;
-		std::vector<EdgeDrawG> edges;
-		std::vector<ShadowDraw> shadows;
+                std::vector<FaceDrawG> faces;
+                std::vector<EdgeDrawG> edges;
 
         for (auto [_, idx] : drawOrder) {
 			const Cube& cb = cubes[idx];
@@ -398,12 +418,19 @@ void Game::run() {
 			
 
             for (const auto& f : FACE) {
-                
-				V3 v0 = vw[f[0]];
-				V3 v1 = vw[f[1]];
-				V3 v2 = vw[f[2]];
-				V3 nW = norm(cross(v1 - v0, v2 - v0));
-				double shade = light.intensity * std::max(0.0, dot(nW, -1 * light.direction));
+
+                                V3 v0 = vw[f[0]];
+                                V3 v1 = vw[f[1]];
+                                V3 v2 = vw[f[2]];
+                                V3 v3 = vw[f[3]];
+                                V3 nW = norm(cross(v1 - v0, v2 - v0));
+                                V3 center = (v0 + v1 + v2 + v3) / 4.0;
+                                double shade = 0.0;
+                                for (const auto& lt : lights) {
+                                    V3 L = norm(lt.pos - center);
+                                    shade += lt.intensity * std::max(0.0, dot(nW, L));
+                                }
+                                shade = std::min(shade, 1.0);
 
                 if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
                     std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
@@ -414,20 +441,6 @@ void Game::run() {
 				faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] }, shaded, isSel });
 			}
 
-			// --- Shadow polygon ---
-			const std::array<int, 4> BOT = FACE[4];
-			std::array<P2, 4> sp;
-			bool okShadow = true;
-			for (int si = 0; si < 4; ++si) {
-				V3 v = vw[BOT[si]];
-				if (std::abs(light.direction.y) < 1e-6) { okShadow = false; break; }
-				double t = (SHADOW_PLANE_Y - v.y) / light.direction.y;
-				V3 proj = v + light.direction * t;
-				sp[si] = scr(proj);
-				if (std::isinf(sp[si].x)) { okShadow = false; break; }
-            }
-
-			if (okShadow) shadows.push_back({ sp });
 
 			// ── 辺を push ────────────────────
 			for (auto [a, b] : EDGE)
@@ -446,23 +459,26 @@ void Game::run() {
 
 		std::sort(faces.begin(), faces.end(),
 		  [](auto& a, auto& b) { return a.d < b.d; });
-		for (const auto& sh : shadows)
-			Polygon{ Vec2{sh.p[0].x,sh.p[0].y}, Vec2{sh.p[1].x,sh.p[1].y},
-					 Vec2{sh.p[2].x,sh.p[2].y}, Vec2{sh.p[3].x,sh.p[3].y} }
-		.draw(ColorF{ 0,0,0,0.2 });
         for (const auto& fc : faces)
             Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
                      Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
 
 
-		std::stable_sort(edges.begin(), edges.end(),
-			[](const EdgeDrawG& a, const EdgeDrawG& b)
-			{
-						if (std::abs(a.d - b.d) > DEP_TOL)     // 1. 深度優先
-							return a.d > b.d;                  // （奥→手前）
+        std::stable_sort(edges.begin(), edges.end(),
+        [](const EdgeDrawG& a, const EdgeDrawG& b)
+        {
+            if (std::abs(a.d - b.d) > DEP_TOL)
+                return a.d > b.d;
+            return !a.selected && b.selected;
+        });
 
-						return !a.selected && b.selected;      // 2. 同深度なら選択を後描き
-			});
+        for (size_t li = 0; li < lights.size(); ++li) {
+            P2 lp = scr(lights[li].pos);
+            if (!std::isinf(lp.x)) {
+                ColorF lc = (static_cast<int>(li) == lightSel) ? ColorF(Palette::Yellow) : ColorF{1,1,1};
+                Circle{ lp.x, lp.y, 6 }.draw(lc);
+            }
+        }
 
 
 
