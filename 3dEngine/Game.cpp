@@ -287,6 +287,21 @@ void Game::run() {
             SimpleGUI::Slider(U"Intensity", lights[lightSel].intensity, 0.0, 5.0, Vec2{20,80});
         }
 
+        if (free && KeyDelete.down()) {
+            if (sel != -1) {
+                grid.erase({ gIdx(cubes[sel].c.x), gIdx(cubes[sel].c.z) });
+                cubes.erase(cubes.begin() + sel);
+                sel = -1;
+                drag.on = false;
+                activeHd = Handle::None;
+            } else if (lightSel != -1) {
+                lights.erase(lights.begin() + lightSel);
+                lightSel = -1;
+                drag.on = false;
+                activeHd = Handle::None;
+            }
+        }
+
         auto scr = [&](V3 w) { return screenProject(w, cam, Rv, U, F, WINF.x, WINF.y); };
         auto toView = [&](V3 w) {
             V3 r = w - cam;
