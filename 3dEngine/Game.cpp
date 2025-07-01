@@ -555,36 +555,36 @@ void Game::run() {
 
             for (const auto& f : FACE) {
 
-                V3 v0 = vw[f[0]];
-                V3 v1 = vw[f[1]];
-                V3 v2 = vw[f[2]];
-                V3 v3 = vw[f[3]];
-                V3 nW = norm(cross(v1 - v0, v2 - v0));
-                V3 center = (v0 + v1 + v2 + v3) / 4.0;
+                                V3 v0 = vw[f[0]];
+                                V3 v1 = vw[f[1]];
+                                V3 v2 = vw[f[2]];
+                                V3 v3 = vw[f[3]];
+                                V3 nW = norm(cross(v1 - v0, v2 - v0));
+                                V3 center = (v0 + v1 + v2 + v3) / 4.0;
+								const double AMBIENT = 0.15;       // 適当に 0.0〜0.3
+								double shade = AMBIENT;
 
-                // Skip back faces (backface culling)
-                if (dot(nW, cam - center) <= 0) continue;
+								for (const auto& lt : lights)
+								{
+									V3  L = -1 * lt.dir();                    // 光の入射方向（無限遠）
+									double diff = Max(0.0, dot(nW, L));   // 拡散係数
+									shade += lt.intensity * diff;         // intensity そのまま
+								}
 
-                const double AMBIENT = 0.15;       // 適当に 0.0〜0.3
-                double shade = AMBIENT;
+								/* 明度を 0〜2 にクランプ（強度 5 の伸びしろ確保） */
+								shade = Clamp(shade, 0.0, 2.0);
+								ColorF shaded = col * shade;
 
-                for (const auto& lt : lights) {
-                    V3  L = -1 * lt.dir();                    // 光の入射方向（無限遠）
-                    double diff = Max(0.0, dot(nW, L));   // 拡散係数
-                    shade += lt.intensity * diff;         // intensity そのまま
-                }
 
-                /* 明度を 0〜2 にクランプ（強度 5 の伸びしろ確保） */
-                shade = Clamp(shade, 0.0, 2.0);
-                ColorF shaded = col * shade;
 
                 if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
                     std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
-                double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
-                                dot(v2 - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
-                bool isSel = (idx == sel);
-                faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] }, shaded, isSel });
-            }
+				double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
+								dot(v2 - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
+				bool isSel = (idx == sel);
+				shaded = col * shade;
+				faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] }, shaded, isSel });
+			}
 
 
 			// ── 辺を push ────────────────────
