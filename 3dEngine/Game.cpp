@@ -852,42 +852,36 @@ void Game::run() {
 				es.push_back({ db, bp[k1], bp[k], 2.0 });     // 時計回りに反転
 			}
 
-			/* --- 上面 --- */
-			{
-				V3 topC{ pos.x, top, pos.z };
-				if (dot(V3{ 0,1,0 }, topC - cam) < 0)
-				{
-					std::vector<P2> poly(SEG);
-					double d = 0;
-					bool ok = true;
-					for (int k = 0; k < SEG; ++k)
-					{
-						if (std::isinf(tp[k].x)) { ok = false; break; }
-						poly[k] = tp[k];
-						d += dot(tv[k] - cam, F);
-					}
-					if (ok) qs.push_back({ d / SEG, poly });
-				}
-			}
+                        /* --- 上面 --- */
+                        {
+                                V3 topC{ pos.x, top, pos.z };
+                                std::vector<P2> poly(SEG);
+                                double d = 0;
+                                bool ok = true;
+                                for (int k = 0; k < SEG; ++k)
+                                {
+                                        if (std::isinf(tp[k].x)) { ok = false; break; }
+                                        poly[k] = tp[k];
+                                        d += dot(tv[k] - cam, F);
+                                }
+                                if (ok) qs.push_back({ d / SEG, poly });
+                        }
 
-			/* --- 下面 --- */
-			{
-				V3 botC{ pos.x, foot, pos.z };
-				if (dot(V3{ 0,-1,0 }, botC - cam) < 0)
-				{
-					std::vector<P2> poly(SEG);
-					double d = 0;
-					bool ok = true;
-					for (int k = 0; k < SEG; ++k)
-					{
-						int kk = SEG - 1 - k;
-						if (std::isinf(bp[kk].x)) { ok = false; break; }
-						poly[k] = bp[kk];
-						d += dot(bv[kk] - cam, F);
-					}
-					if (ok) qs.push_back({ d / SEG, poly });
-				}
-			}
+                        /* --- 下面 --- */
+                        {
+                                V3 botC{ pos.x, foot, pos.z };
+                                std::vector<P2> poly(SEG);
+                                double d = 0;
+                                bool ok = true;
+                                for (int k = 0; k < SEG; ++k)
+                                {
+                                        int kk = SEG - 1 - k;
+                                        if (std::isinf(bp[kk].x)) { ok = false; break; }
+                                        poly[k] = bp[kk];
+                                        d += dot(bv[kk] - cam, F);
+                                }
+                                if (ok) qs.push_back({ d / SEG, poly });
+                        }
 
 			/* --- 描画順ソート --- */
 			std::stable_sort(qs.begin(), qs.end(),
