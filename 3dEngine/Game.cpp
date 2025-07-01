@@ -597,7 +597,10 @@ void Game::run() {
 				double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
 								dot(v2 - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
 				bool isSel = (idx == sel);
-				shaded = col * shade;
+				shaded = col;
+				shaded.r *= shade;
+				shaded.g *= shade;
+				shaded.b *= shade;
 				faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] }, shaded, isSel });
 			}
 
