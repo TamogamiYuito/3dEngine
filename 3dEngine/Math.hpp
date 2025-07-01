@@ -24,7 +24,8 @@ inline double  len(V3 v) { return std::sqrt(dot(v, v)); }
 inline V3      norm(V3 v) { double l = len(v); return (l > 1e-9) ? v / l : V3{ 0,0,0 }; }
 
 struct P2 {
-    double x, y;};
+    double x, y;
+};
 constexpr double CAM_DIST = 300;
 constexpr double FOCAL = 400;
 // Move the near clip plane even closer to the camera so objects do not
@@ -33,9 +34,9 @@ constexpr double NEAR_Z = 0.01;
 inline P2 project(V3 v, double cx, double cy) {
     double z = v.z + CAM_DIST;
     if (z < NEAR_Z) {
-        // Clamp to the near plane instead of discarding to avoid
-        // faces disappearing when they partially pass the camera.
-        z = NEAR_Z;    }
+        const double inf = std::numeric_limits<double>::infinity();
+        return { inf, inf };
+    }
     return { (FOCAL * v.x) / z + cx,  -(FOCAL * v.y) / z + cy };
 }
 

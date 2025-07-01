@@ -287,21 +287,6 @@ void Game::run() {
             SimpleGUI::Slider(U"Intensity", lights[lightSel].intensity, 0.0, 5.0, Vec2{20,80});
         }
 
-        if (free && KeyDelete.down()) {
-            if (sel != -1) {
-                grid.erase({ gIdx(cubes[sel].c.x), gIdx(cubes[sel].c.z) });
-                cubes.erase(cubes.begin() + sel);
-                sel = -1;
-                drag.on = false;
-                activeHd = Handle::None;
-            } else if (lightSel != -1) {
-                lights.erase(lights.begin() + lightSel);
-                lightSel = -1;
-                drag.on = false;
-                activeHd = Handle::None;
-            }
-        }
-
         auto scr = [&](V3 w) { return screenProject(w, cam, Rv, U, F, WINF.x, WINF.y); };
         auto toView = [&](V3 w) {
             V3 r = w - cam;
@@ -597,10 +582,7 @@ void Game::run() {
 				double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
 								dot(v2 - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
 				bool isSel = (idx == sel);
-				shaded = col;
-				shaded.r *= shade;
-				shaded.g *= shade;
-				shaded.b *= shade;
+				shaded = col * shade;
 				faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] }, shaded, isSel });
 			}
 
@@ -873,7 +855,7 @@ void Game::run() {
 			/* --- 上面 --- */
 			{
 				V3 topC{ pos.x, top, pos.z };
-                                if (dot(V3{ 0,1,0 }, topC - cam) <= 0)
+				if (dot(V3{ 0,1,0 }, topC - cam) < 0)
 				{
 					std::vector<P2> poly(SEG);
 					double d = 0;
@@ -891,7 +873,7 @@ void Game::run() {
 			/* --- 下面 --- */
 			{
 				V3 botC{ pos.x, foot, pos.z };
-                                if (dot(V3{ 0,-1,0 }, botC - cam) <= 0)
+				if (dot(V3{ 0,-1,0 }, botC - cam) < 0)
 				{
 					std::vector<P2> poly(SEG);
 					double d = 0;

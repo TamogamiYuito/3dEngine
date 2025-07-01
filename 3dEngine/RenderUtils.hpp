@@ -9,4 +9,4 @@ std::optional<double> angleFromCursor(s3d::Vec2 p, V3 axis, V3 pivot,
                                       V3 cam, V3 Rv, V3 U, V3 F,
                                       double cx, double cy);
 
-inline Array<V3> clipNear(const Array<V3>& in, double kNear);
+
