@@ -34,8 +34,9 @@ constexpr double NEAR_Z = 0.01;
 inline P2 project(V3 v, double cx, double cy) {
     double z = v.z + CAM_DIST;
     if (z < NEAR_Z) {
-        const double inf = std::numeric_limits<double>::infinity();
-        return { inf, inf };
+        // Clamp to the near plane instead of discarding to avoid
+        // faces disappearing when they partially pass the camera.
+        z = NEAR_Z;
     }
     return { (FOCAL * v.x) / z + cx,  -(FOCAL * v.y) / z + cy };
 }
