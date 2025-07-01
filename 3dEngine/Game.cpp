@@ -564,12 +564,12 @@ void Game::run() {
 								const double AMBIENT = 0.15;       // 適当に 0.0〜0.3
 								double shade = AMBIENT;
 
-                                for (const auto& lt : lights)
-                                {
-                                    V3  L = lt.dir();                    // 光の入射方向（無限遠）
-                                    double diff = Max(0.0, dot(nW, L));   // 拡散係数
-                                    shade += lt.intensity * diff;         // intensity そのまま
-                                }
+								for (const auto& lt : lights)
+								{
+									V3  L = -1 * lt.dir();                    // 光の入射方向（無限遠）
+									double diff = Max(0.0, dot(nW, L));   // 拡散係数
+									shade += lt.intensity * diff;         // intensity そのまま
+								}
 
 								/* 明度を 0〜2 にクランプ（強度 5 の伸びしろ確保） */
 								shade = Clamp(shade, 0.0, 2.0);
