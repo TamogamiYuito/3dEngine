@@ -870,7 +870,7 @@ void Game::run() {
 			/* --- 上面 --- */
 			{
 				V3 topC{ pos.x, top, pos.z };
-				if (dot(V3{ 0,1,0 }, topC - cam) < 0)
+                                if (dot(V3{ 0,1,0 }, topC - cam) <= 0)
 				{
 					std::vector<P2> poly(SEG);
 					double d = 0;
@@ -888,7 +888,7 @@ void Game::run() {
 			/* --- 下面 --- */
 			{
 				V3 botC{ pos.x, foot, pos.z };
-				if (dot(V3{ 0,-1,0 }, botC - cam) < 0)
+                                if (dot(V3{ 0,-1,0 }, botC - cam) <= 0)
 				{
 					std::vector<P2> poly(SEG);
 					double d = 0;
