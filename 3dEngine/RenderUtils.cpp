@@ -2,6 +2,7 @@
 #include <optional>
 #include <cmath>
 
+
 P2 screenProject(V3 world, V3 cam, V3 Rv, V3 U, V3 F, double cx, double cy) {
     V3 r = world - cam;
     return project({ dot(r,Rv), dot(r,U), -dot(r,F) }, cx, cy);
@@ -24,3 +25,6 @@ std::optional<double> angleFromCursor(s3d::Vec2 p, V3 axis, V3 pivot,
     if (axF < 0) ang = -ang;
     return ang;
 }
+
+
+
