@@ -237,6 +237,8 @@ void Game::run() {
         V3& pos = camera.pos;
         double& vy = camera.vy;
         bool free = camera.free;
+		const double cx = WINF.x;     // ＝ Scene::Width()*0.5
+		const double cy = WINF.y;
 
         if (free && !drag.on) {
             if (KeyW.down()) mode = Mode::Move;
@@ -285,21 +287,6 @@ void Game::run() {
             if (KeyX.pressed())
                 lights[lightSel].intensity += dt;
             SimpleGUI::Slider(U"Intensity", lights[lightSel].intensity, 0.0, 5.0, Vec2{20,80});
-        }
-
-        if (free && KeyDelete.down()) {
-            if (sel != -1) {
-                grid.erase({ gIdx(cubes[sel].c.x), gIdx(cubes[sel].c.z) });
-                cubes.erase(cubes.begin() + sel);
-                sel = -1;
-                drag.on = false;
-                activeHd = Handle::None;
-            } else if (lightSel != -1) {
-                lights.erase(lights.begin() + lightSel);
-                lightSel = -1;
-                drag.on = false;
-                activeHd = Handle::None;
-            }
         }
 
         auto scr = [&](V3 w) { return screenProject(w, cam, Rv, U, F, WINF.x, WINF.y); };
@@ -545,7 +532,13 @@ void Game::run() {
                   [](const auto& a, const auto& b) { return a.first > b.first; });
 
 
-                struct FaceDrawG { double d; std::array<P2,4> p; ColorF col; bool selected;};
+		struct FaceDrawG
+		{
+			double              d;
+			std::vector<P2>     pts;      // ← std::vector に変更
+			ColorF              col;
+			bool                selected;
+		};
         struct EdgeDrawG { double d; P2 a, b; ColorF col; double th; bool selected;};
                 std::vector<FaceDrawG> faces;
                 std::vector<EdgeDrawG> edges;
@@ -568,37 +561,51 @@ void Game::run() {
             }
 			
 
-            for (const auto& f : FACE) {
+			constexpr double kNear = 0.05;              // カメラ前 5cm
 
-                                V3 v0 = vw[f[0]];
-                                V3 v1 = vw[f[1]];
-                                V3 v2 = vw[f[2]];
-                                V3 v3 = vw[f[3]];
-                                V3 nW = norm(cross(v1 - v0, v2 - v0));
-                                V3 center = (v0 + v1 + v2 + v3) / 4.0;
-								const double AMBIENT = 0.15;       // 適当に 0.0〜0.3
-								double shade = AMBIENT;
+			for (const auto& f : FACE)          // ← f が見えるスコープ
+			{
+				/* ---------- ワールド頂点 → カメラ空間 ---------- */
+				std::vector<V3> vCam(4);
+				for (int i = 0; i < 4; ++i)
+				{
+					V3 r = vw[f[i]] - cam;
+					vCam[i] = { dot(r, Rv), dot(r, U), -dot(r, F) };
+				}
 
-								for (const auto& lt : lights)
-								{
-									V3  L = -1 * lt.dir();                    // 光の入射方向（無限遠）
-									double diff = Max(0.0, dot(nW, L));   // 拡散係数
-									shade += lt.intensity * diff;         // intensity そのまま
-								}
+				/* ---------- 法線（外向き） ---------- */
+				V3 nW = norm(cross(vw[f[1]] - vw[f[0]],   // ★ これが無いと nW 未定義
+					vw[f[2]] - vw[f[0]]));
 
-								/* 明度を 0〜2 にクランプ（強度 5 の伸びしろ確保） */
-								shade = Clamp(shade, 0.0, 2.0);
-								ColorF shaded = col * shade;
+				/* ---------- ライティング ---------- */
+				double shade = 0.15;                 // AMBIENT
+				for (const auto& lt : lights)
+				{
+					V3 L = -1 * lt.dir();
+					double diff = std::max(0.0, dot(nW, L));   // ★ std::max に
+					shade += lt.intensity * diff;
+				}
+				shade = Clamp(shade, 0.0, 2.0);
 
+				ColorF shaded = col * shade;         // 1 行で OK
 
+				/* ---------- near クリップ ---------- */
+				auto vClip = clipNear(vCam, kNear);
+				if (vClip.size() < 3) continue;
 
-                if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
-                    std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
-				double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
-								dot(v2 - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
-				bool isSel = (idx == sel);
-				shaded = col * shade;
-				faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] }, shaded, isSel });
+				/* ---------- 投影 ---------- */
+				std::vector<P2> vp2(vClip.size());
+				double depth = 0;
+				for (size_t i = 0; i < vClip.size(); ++i)
+				{
+					double z = vClip[i].z;
+					depth += z;
+					vp2[i] = { cx + FOCAL * vClip[i].x / z,
+							   cy - FOCAL * vClip[i].y / z };
+				}
+				depth /= vClip.size();
+
+				faces.push_back({ -depth, std::move(vp2), shaded, (idx == sel) });
 			}
 
 
@@ -619,9 +626,14 @@ void Game::run() {
 
 		std::sort(faces.begin(), faces.end(),
 		  [](auto& a, auto& b) { return a.d < b.d; });
-        for (const auto& fc : faces)
-            Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
-                     Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
+		for (const auto& fc : faces)
+		{
+			Array<s3d::Vec2> arr(fc.pts.size());
+			for (size_t i = 0; i < fc.pts.size(); ++i)
+				arr[i] = { fc.pts[i].x, fc.pts[i].y };
+
+			s3d::Polygon{ arr }.draw(fc.col);
+		}
 
 
         std::stable_sort(edges.begin(), edges.end(),
@@ -867,42 +879,36 @@ void Game::run() {
 				es.push_back({ db, bp[k1], bp[k], 2.0 });     // 時計回りに反転
 			}
 
-			/* --- 上面 --- */
-			{
-				V3 topC{ pos.x, top, pos.z };
-				if (dot(V3{ 0,1,0 }, topC - cam) < 0)
-				{
-					std::vector<P2> poly(SEG);
-					double d = 0;
-					bool ok = true;
-					for (int k = 0; k < SEG; ++k)
-					{
-						if (std::isinf(tp[k].x)) { ok = false; break; }
-						poly[k] = tp[k];
-						d += dot(tv[k] - cam, F);
-					}
-					if (ok) qs.push_back({ d / SEG, poly });
-				}
-			}
+                        /* --- 上面 --- */
+                        {
+                                V3 topC{ pos.x, top, pos.z };
+                                std::vector<P2> poly(SEG);
+                                double d = 0;
+                                bool ok = true;
+                                for (int k = 0; k < SEG; ++k)
+                                {
+                                        if (std::isinf(tp[k].x)) { ok = false; break; }
+                                        poly[k] = tp[k];
+                                        d += dot(tv[k] - cam, F);
+                                }
+                                if (ok) qs.push_back({ d / SEG, poly });
+                        }
 
-			/* --- 下面 --- */
-			{
-				V3 botC{ pos.x, foot, pos.z };
-				if (dot(V3{ 0,-1,0 }, botC - cam) < 0)
-				{
-					std::vector<P2> poly(SEG);
-					double d = 0;
-					bool ok = true;
-					for (int k = 0; k < SEG; ++k)
-					{
-						int kk = SEG - 1 - k;
-						if (std::isinf(bp[kk].x)) { ok = false; break; }
-						poly[k] = bp[kk];
-						d += dot(bv[kk] - cam, F);
-					}
-					if (ok) qs.push_back({ d / SEG, poly });
-				}
-			}
+                        /* --- 下面 --- */
+                        {
+                                V3 botC{ pos.x, foot, pos.z };
+                                std::vector<P2> poly(SEG);
+                                double d = 0;
+                                bool ok = true;
+                                for (int k = 0; k < SEG; ++k)
+                                {
+                                        int kk = SEG - 1 - k;
+                                        if (std::isinf(bp[kk].x)) { ok = false; break; }
+                                        poly[k] = bp[kk];
+                                        d += dot(bv[kk] - cam, F);
+                                }
+                                if (ok) qs.push_back({ d / SEG, poly });
+                        }
 
 			/* --- 描画順ソート --- */
 			std::stable_sort(qs.begin(), qs.end(),

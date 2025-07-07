@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <array>
 #include <unordered_set>
 #include <cmath>
@@ -24,6 +24,7 @@ constexpr std::array<std::array<int,4>, 6> FACE{ {
     {0,1,5,4}, // -Y
     {3,7,6,2}  // +Y
 } };
+
 
 struct GKey {
     int gx, gz;
