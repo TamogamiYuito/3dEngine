@@ -1,4 +1,4 @@
-﻿#include "Light.hpp"
+#include "Light.hpp"
 #include "RenderUtils.hpp"
 #include <cmath>
 
@@ -8,7 +8,6 @@ bool Light::checkHovered(const s3d::Vec2& cur, double cx, double cy,
     double minX = 1e9, minY = 1e9;
     double maxX = -1e9, maxY = -1e9;
     bool any = false;
-
     for (int k = 0; k < 8; ++k) {
         P2 p = scr(c + qRotate(q, LOCAL[k] * s));
         if (std::isinf(p.x)) continue;
