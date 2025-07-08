@@ -33,9 +33,11 @@ constexpr double FOCAL = 400;
 constexpr double NEAR_Z = 0.01;
 inline P2 project(V3 v, double cx, double cy) {
     double z = v.z + CAM_DIST;
+    // Clip vertices that fall behind the near plane by projecting them onto
+    // the plane instead of discarding them entirely. This avoids polygons
+    // disappearing when part of them intersects the near clip plane.
     if (z < NEAR_Z) {
-        const double inf = std::numeric_limits<double>::infinity();
-        return { inf, inf };
+        z = NEAR_Z;
     }
     return { (FOCAL * v.x) / z + cx,  -(FOCAL * v.y) / z + cy };
 }
