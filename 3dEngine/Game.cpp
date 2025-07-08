@@ -545,7 +545,7 @@ void Game::run() {
                   [](const auto& a, const auto& b) { return a.first > b.first; });
 
 
-                struct FaceDrawG { double d; std::vector<P2> p; ColorF col; bool selected;};
+                struct FaceDrawG { double d; std::array<P2,4> p; ColorF col; bool selected;};
         struct EdgeDrawG { double d; P2 a, b; ColorF col; double th; bool selected;};
                 std::vector<FaceDrawG> faces;
                 std::vector<EdgeDrawG> edges;
@@ -592,14 +592,13 @@ void Game::run() {
 
 
 
-                std::array<V3, 4> quad{ v0, v1, v2, v3 };
-                double depth = 0.0;
-                std::vector<P2> poly = clipProjectQuad(quad, cam, Rv, U, F,
-                                                      WINF.x, WINF.y, depth);
-                if (poly.size() < 3) continue;
-                bool isSel = (idx == sel);
-                shaded = col * shade;
-                faces.push_back({ depth, poly, shaded, isSel });
+                if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
+                    std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
+				double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
+								dot(v2 - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
+				bool isSel = (idx == sel);
+				shaded = col * shade;
+				faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] }, shaded, isSel });
 			}
 
 
@@ -620,20 +619,9 @@ void Game::run() {
 
 		std::sort(faces.begin(), faces.end(),
 		  [](auto& a, auto& b) { return a.d < b.d; });
-        for (const auto& fc : faces) {
-            if (fc.p.size() == 3) {
-                Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
-                         Vec2{fc.p[2].x,fc.p[2].y} }.draw(fc.col);
-            } else if (fc.p.size() == 4) {
-                Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
-                         Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
-            } else {
-                Array<Vec2> arr(fc.p.size());
-                for (size_t i = 0; i < fc.p.size(); ++i)
-                    arr[i] = Vec2{ fc.p[i].x, fc.p[i].y };
-                Polygon{ arr }.draw(fc.col);
-            }
-        }
+        for (const auto& fc : faces)
+            Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
+                     Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
 
 
         std::stable_sort(edges.begin(), edges.end(),
