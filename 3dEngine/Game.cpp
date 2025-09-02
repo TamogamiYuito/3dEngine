@@ -565,62 +565,62 @@ void Game::run() {
 			
 
     for (const auto& f : FACE) {
-    V3 v0 = vw[f[0]];
-    V3 v1 = vw[f[1]];
-    V3 v2 = vw[f[2]];
-    V3 v3 = vw[f[3]];
 
-    // 1) とりあえず法線を作る（回し順はどっちでもOKにする）
-    //    ※後で「外向き」＆「カメラ側向き」に矯正するので、ここは任意
-    V3 nW = cross(v1 - v0, v2 - v0); // ← 以前の cross(v2,v1) でも構いません
-    V3 center = (v0 + v1 + v2 + v3) / 4.0;
+	// --- 頂点と中心 ---
+	V3 v0 = vw[f[0]], v1 = vw[f[1]], v2 = vw[f[2]], v3 = vw[f[3]];
+	V3 center = (v0 + v1 + v2 + v3) / 4.0;
 
-    // 2) 「外向き」に矯正（キューブ中心から面中心へのベクトルと同じ向き）
-    V3 outDir = center - cb.c;                   // キューブ中心→面中心（外向き）
-    if (dot(nW, outDir) < 0.0)
-        nW = -nW;         // 反転して外向きに統一
-    nW = norm(nW);
+	// --- 法線（まずは仮の法線を作る） ---
+	// ここは「FACE が外側から見て CCW（反時計）」を想定。
+	// もし FACE が CW（時計）なら、下の cross を cross(v2 - v0, v1 - v0) に変える。
+	// ① 法線の作り方を入れ替え（FACE=外側CCWに対応）
+	V3 nW = cross(v2 - v0, v1 - v0);   // ← v1,v2 を逆にする
 
-    // 3) ライティング用：画面に見えているなら常にカメラ側を向かせる
-    V3 toCam = cam - center;
-    V3 nLit  = (dot(nW, toCam) < 0.0) ? -nW : nW;
+	// ② 外向き矯正（そのまま）
+	V3 outDir = center - cb.c;
+	if (dot(nW, outDir) < 0.0) nW = -1 * nW;
+	nW = norm(nW);
 
-    // --- ライティング ---
-    const double AMBIENT = 0.15;
-    double shade = AMBIENT;
-    for (const auto& lt : lights) {
-        V3 L = -lt.dir();                 // DirLightの入射方向（ライト→物体）= -dir()
-        L = norm(L);
-        shade += lt.intensity * Max(0.0, dot(nLit, L));
-    }
-    shade = Clamp(shade, 0.0, 2.0);
-    ColorF shaded = col * shade;
+	// ③ 3Dカリング（前面のみ描画）
+	V3 toCam = cam - center;
+	if (dot(nW, toCam) <= 0.0) continue;   // 前面を残す
 
-    // --- 投影の不正値を弾く ---
-    if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
-        std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) {
-        continue;
-    }
+	// --- ライティング（必要ならカメラ側へ再矯正してもOK）---
+	V3 nLit = nW; // すでに前面のみ通過しているので nW のままで十分安定
+	double shade = 0.15;
+	for (const auto& lt : lights) {
+		V3 L = lt.dir();           // lt.dir() がライトの向きなら -dir() が入射方向
+		L = norm(L);
+		shade += lt.intensity * Max(0.0, dot(nLit, L));
+	}
+	double lit = Clamp(shade, 0.0, 2.0);
+	ColorF shaded{ col.r * lit, col.g * lit, col.b * lit, 1.0 };
 
-    // --- （任意）2D バックフェースカリング：Siv3DはY下向きなので符号に注意 ---
-    auto p0 = vp[f[0]], p1 = vp[f[1]], p2 = vp[f[2]], p3 = vp[f[3]];
-    double area2 = (p1.x - p0.x)*(p2.y - p0.y) - (p1.y - p0.y)*(p2.x - p0.x);
-    // 画面の表向き判定。全消えする場合は <= を >= に変える
-    //if (area2 >= 0.0) continue;
+	// --- 投影チェック ---
+	if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
+		std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
 
+	// --- 2D バックフェースは一旦使わない（座標系依存で全消えの元）---
+	// ※必要になったら復活させ、符号は環境に合わせて <= / >= を切替
 
-        if (dot(nW, toCam) > 0.0) {
-                continue; // カメラから見て裏面は描かない
-        }
+	// --- デプス ---
+	double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
+					dot(v2 - cam, F) + dot(v3 - cam, F)) / 4.0;
 
-    // --- Zソート用の奥行き（v3 を使う。vw[f[3]]の混在は避ける）---
-    double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
-                    dot(v2 - cam, F) + dot(v3 - cam, F)) / 4.0;
+	// --- 描画 ---
+	auto p0 = vp[f[0]], p1 = vp[f[1]], p2 = vp[f[2]], p3 = vp[f[3]];
 
-    draws.push_back({ depth, 0, [p0,p1,p2,p3,shaded]() {
-        Polygon{ Vec2{p0.x,p0.y}, Vec2{p1.x,p1.y},
-                 Vec2{p2.x,p2.y}, Vec2{p3.x,p3.y} }.draw(shaded);
-    }});
+	// 画面で (p0,p1,p2) が CW になっていたら入れ替えて CCW に正規化
+	auto area2 = [](P2 A, P2 B, P2 C) {
+		return (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x);
+		};
+	if (area2(p0, p1, p2) < 0.0) std::swap(p1, p2);
+
+	draws.push_back({ depth, 0, [p0,p1,p2,p3,shaded]() {
+	ScopedRenderStates2D opaque{ BlendState::Opaque }; // 透け防止（任意だが安全）
+	Triangle{ {p0.x,p0.y}, {p1.x,p1.y}, {p2.x,p2.y} }.draw(shaded);
+	Triangle{ {p0.x,p0.y}, {p2.x,p2.y}, {p3.x,p3.y} }.draw(shaded);
+	} });
 }
 
 

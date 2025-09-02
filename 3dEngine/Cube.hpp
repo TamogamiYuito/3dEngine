@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <array>
 #include <unordered_set>
 #include <cmath>
@@ -16,13 +16,13 @@ constexpr std::array<std::pair<int, int>, 12> EDGE{ {
     {4,5},{5,6},{6,7},{7,4},
     {0,4},{1,5},{2,6},{3,7}
 } };
-constexpr std::array<std::array<int,4>, 6> FACE{ {
-    {0,3,2,1}, // -Z
-    {4,5,6,7}, // +Z
-    {0,4,7,3}, // -X
-    {1,2,6,5}, // +X
-    {0,1,5,4}, // -Y
-    {3,7,6,2}  // +Y
+constexpr std::array<std::array<int, 4>, 6> FACE{ {
+	{ 0, 3, 2, 1 }, // -Z（手前）  外側から見て CCW → 法線 -Z
+	{ 4, 5, 6, 7 }, // +Z（奥）    外側から見て CCW → 法線 +Z
+	{ 0, 4, 7, 3 }, // -X（左）    外側から見て CCW → 法線 -X
+	{ 1, 2, 6, 5 }, // +X（右）    外側から見て CCW → 法線 +X
+	{ 3, 7, 6, 2 }, // +Y（上）    外側から見て CCW → 法線 +Y
+	{ 0, 1, 5, 4 }  // -Y（下）    外側から見て CCW → 法線 -Y
 } };
 
 struct GKey {
