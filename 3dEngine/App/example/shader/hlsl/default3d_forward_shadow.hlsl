@@ -91,8 +91,11 @@ cbuffer PSShadow : register(b4)
 
 float2 Depth_PS(s3d::PSInput input) : SV_TARGET
 {
-	const float depth = length(g_sunPosition - input.worldPosition);
-	return float2(depth, (depth * depth));
+        const float3 n = normalize(input.normal);
+        const float bias = max(0.05 * (1.0 - dot(n, g_sunDirection)), 0.005);
+        const float3 position = (input.worldPosition + (n * bias));
+        const float depth = length(g_sunPosition - position);
+        return float2(depth, (depth * depth));
 }
 //
 ////////////////////////////////////////////////////////////
