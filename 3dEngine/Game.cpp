@@ -570,10 +570,11 @@ void Game::run() {
                                V3 v1 = vw[f[1]];
                                V3 v2 = vw[f[2]];
                                V3 v3 = vw[f[3]];
-                               // Compute outward-facing normal using the
-                               // standard right-handed winding order of the
-                               // face vertices.
-                               V3 nW = norm(cross(v1 - v0, v2 - v0));
+                               // Compute outward-facing normal. The FACE
+                               // indices are listed clockwise when viewed
+                               // from the outside, so swap the winding order
+                               // to obtain the correct outward normal.
+                               V3 nW = norm(cross(v2 - v0, v1 - v0));
                                V3 center = (v0 + v1 + v2 + v3) / 4.0;
 								const double AMBIENT = 0.15;       // 適当に 0.0〜0.3
 								double shade = AMBIENT;
