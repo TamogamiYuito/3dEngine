@@ -3,6 +3,7 @@
 #include "Light.hpp"
 #include <Siv3D.hpp>
 #include <algorithm>
+#include <functional>
 
 using namespace s3d;
 
@@ -534,8 +535,6 @@ void Game::run() {
         }
 
         /*--- キューブ ---*/
-		constexpr double DEPTH_EPS = 1e-4;
-
 
         std::vector<std::pair<double, int>> drawOrder(cubes.size());
         for (size_t i = 0; i < cubes.size(); ++i) {
@@ -544,11 +543,8 @@ void Game::run() {
         std::sort(drawOrder.begin(), drawOrder.end(),
                   [](const auto& a, const auto& b) { return a.first > b.first; });
 
-
-                struct FaceDrawG { double d; std::array<P2,4> p; ColorF col; bool selected;};
-        struct EdgeDrawG { double d; P2 a, b; ColorF col; double th; bool selected;};
-                std::vector<FaceDrawG> faces;
-                std::vector<EdgeDrawG> edges;
+        struct DrawCmd { double d; int layer; std::function<void()> fn; };
+        std::vector<DrawCmd> draws;
 
         for (auto [_, idx] : drawOrder) {
 			const Cube& cb = cubes[idx];
@@ -557,7 +553,7 @@ void Game::run() {
 			ColorF col = ColorF{ 1.0, 0.8, 0.3 };
 			if (free && idx == hoverIdx) col = ColorF(Palette::Yellow);
 			if (idx == sel)              col = ColorF(Palette::Red);
-			double th = (idx == sel) ? 3 : 1;
+                        double th = (idx == sel) ? 3 : 1;
 
             std::array<V3, 8> vw;
             std::array<P2, 8> vp;
@@ -574,10 +570,11 @@ void Game::run() {
                                V3 v1 = vw[f[1]];
                                V3 v2 = vw[f[2]];
                                V3 v3 = vw[f[3]];
-                               // Compute outward-facing normal using the
-                               // standard right-handed winding order of the
-                               // face vertices.
-                               V3 nW = norm(cross(v1 - v0, v2 - v0));
+                               // Compute outward-facing normal. The FACE
+                               // indices are listed clockwise when viewed
+                               // from the outside, so swap the winding order
+                               // to obtain the correct outward normal.
+                               V3 nW = norm(cross(v2 - v0, v1 - v0));
                                V3 center = (v0 + v1 + v2 + v3) / 4.0;
 								const double AMBIENT = 0.15;       // 適当に 0.0〜0.3
 								double shade = AMBIENT;
@@ -601,40 +598,39 @@ void Game::run() {
 								dot(v2 - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
 				bool isSel = (idx == sel);
 				shaded = col * shade;
-				faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] }, shaded, isSel });
-			}
+                                auto p0 = vp[f[0]]; auto p1 = vp[f[1]];
+                                auto p2 = vp[f[2]]; auto p3 = vp[f[3]];
+                                draws.push_back({ depth, 0, [p0,p1,p2,p3,shaded]() {
+                                        Polygon{ Vec2{p0.x,p0.y}, Vec2{p1.x,p1.y},
+                                                 Vec2{p2.x,p2.y}, Vec2{p3.x,p3.y} }.draw(shaded);
+                                } });
+                        }
 
 
 			// ── 辺を push ────────────────────
-			for (auto [a, b] : EDGE)
-			{
-				if (std::isinf(vp[a].x) || std::isinf(vp[b].x)) continue;
+                        for (auto [a, b] : EDGE)
+                        {
+                                if (std::isinf(vp[a].x) || std::isinf(vp[b].x)) continue;
 
-				double depthEdge = (dot(vw[a] - cam, F) + dot(vw[b] - cam, F)) * 0.5;
-				bool isSel = (idx == sel);
-				if (isSel) depthEdge -= DEPTH_EPS;   // ← 符号は faces と同じに
-
-				edges.push_back({ depthEdge, vp[a], vp[b], col, th, isSel });
-			}
+                                double depthEdge = (dot(vw[a] - cam, F) + dot(vw[b] - cam, F)) * 0.5;
+                                bool isSel = (idx == sel);
+                                P2 pa = vp[a], pb = vp[b];
+                                ColorF ec = col; double eTh = th;
+                                draws.push_back({ depthEdge, isSel ? 2 : 1, [pa,pb,ec,eTh]() {
+                                        Line{ pa.x,pa.y, pb.x,pb.y }.draw(eTh, ec);
+                                } });
+                        }
         }
+        constexpr double DEP_TOL = 1e-6;    // 「ほぼ同じ深度」とみなす閾値
 
-		constexpr double DEP_TOL = 1e-6;    // 「ほぼ同じ深度」とみなす閾値
-
-                std::sort(faces.begin(), faces.end(),
-                  // Draw farther faces first so nearer faces correctly overlay them
-                  [](auto& a, auto& b) { return a.d > b.d; });
-        for (const auto& fc : faces)
-            Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
-                     Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
-
-
-        std::stable_sort(edges.begin(), edges.end(),
-        [](const EdgeDrawG& a, const EdgeDrawG& b)
-        {
-            if (std::abs(a.d - b.d) > DEP_TOL)
-                return a.d > b.d;
-            return !a.selected && b.selected;
-        });
+        std::sort(draws.begin(), draws.end(),
+                [](const DrawCmd& a, const DrawCmd& b)
+                {
+                        if (std::abs(a.d - b.d) > DEP_TOL)
+                                return a.d > b.d;
+                        return a.layer < b.layer;
+                });
+        for (const auto& dc : draws) dc.fn();
 
         /*--- Lights ---*/
         for (size_t i = 0; i < lights.size(); ++i) {
