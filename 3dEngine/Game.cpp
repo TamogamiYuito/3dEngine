@@ -617,8 +617,9 @@ void Game::run() {
 
 		constexpr double DEP_TOL = 1e-6;    // 「ほぼ同じ深度」とみなす閾値
 
-		std::sort(faces.begin(), faces.end(),
-		  [](auto& a, auto& b) { return a.d < b.d; });
+                std::sort(faces.begin(), faces.end(),
+                  // Draw farther faces first so nearer faces correctly overlay them
+                  [](auto& a, auto& b) { return a.d > b.d; });
         for (const auto& fc : faces)
             Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
                      Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
