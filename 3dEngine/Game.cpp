@@ -565,46 +565,57 @@ void Game::run() {
 			
 
             for (const auto& f : FACE) {
+    V3 v0 = vw[f[0]];
+    V3 v1 = vw[f[1]];
+    V3 v2 = vw[f[2]];
+    V3 v3 = vw[f[3]];
 
-                               V3 v0 = vw[f[0]];
-                               V3 v1 = vw[f[1]];
-                               V3 v2 = vw[f[2]];
-                               V3 v3 = vw[f[3]];
-                               // Compute outward-facing normal. The FACE
-                               // indices are listed clockwise when viewed
-                               // from the outside, so swap the winding order
-                               // to obtain the correct outward normal.
-                               V3 nW = norm(cross(v2 - v0, v1 - v0));
-                               V3 center = (v0 + v1 + v2 + v3) / 4.0;
-								const double AMBIENT = 0.15;       // 適当に 0.0〜0.3
-								double shade = AMBIENT;
+    // 1) とりあえず法線を作る（回し順はどっちでもOKにする）
+    //    ※後で「外向き」＆「カメラ側向き」に矯正するので、ここは任意
+    V3 nW = cross(v1 - v0, v2 - v0); // ← 以前の cross(v2,v1) でも構いません
+    V3 center = (v0 + v1 + v2 + v3) / 4.0;
 
-								for (const auto& lt : lights)
-								{
-									V3  L = -1 * lt.dir();                    // 光の入射方向（無限遠）
-									double diff = Max(0.0, dot(nW, L));   // 拡散係数
-									shade += lt.intensity * diff;         // intensity そのまま
-								}
+    // 2) 「外向き」に矯正（キューブ中心から面中心へのベクトルと同じ向き）
+    V3 outDir = center - cb.c;                   // キューブ中心→面中心（外向き）
+    if (dot(nW, outDir) < 0.0) nW = nW;         // 反転して外向きに統一
+    nW = norm(nW);
 
-								/* 明度を 0〜2 にクランプ（強度 5 の伸びしろ確保） */
-								shade = Clamp(shade, 0.0, 2.0);
-								ColorF shaded = col * shade;
+    // 3) ライティング用：画面に見えているなら常にカメラ側を向かせる
+    V3 toCam = cam - center;
+    V3 nLit  = (dot(nW, toCam) < 0.0) ? nW : nW;
 
+    // --- ライティング ---
+    const double AMBIENT = 0.15;
+    double shade = AMBIENT;
+    for (const auto& lt : lights) {
+        V3 L = lt.dir();                 // DirLightの入射方向（ライト→物体）= -dir()
+        L = norm(L);
+        shade += lt.intensity * Max(0.0, dot(nLit, L));
+    }
+    shade = Clamp(shade, 0.0, 2.0);
+    ColorF shaded = col * shade;
 
+    // --- 投影の不正値を弾く ---
+    if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
+        std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) {
+        continue;
+    }
 
-                if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
-                    std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
-				double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
-								dot(v2 - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
-				bool isSel = (idx == sel);
-				shaded = col * shade;
-                                auto p0 = vp[f[0]]; auto p1 = vp[f[1]];
-                                auto p2 = vp[f[2]]; auto p3 = vp[f[3]];
-                                draws.push_back({ depth, 0, [p0,p1,p2,p3,shaded]() {
-                                        Polygon{ Vec2{p0.x,p0.y}, Vec2{p1.x,p1.y},
-                                                 Vec2{p2.x,p2.y}, Vec2{p3.x,p3.y} }.draw(shaded);
-                                } });
-                        }
+    // --- （任意）2D バックフェースカリング：Siv3DはY下向きなので符号に注意 ---
+    auto p0 = vp[f[0]], p1 = vp[f[1]], p2 = vp[f[2]], p3 = vp[f[3]];
+    double area2 = (p1.x - p0.x)*(p2.y - p0.y) - (p1.y - p0.y)*(p2.x - p0.x);
+    // 画面の表向き判定。全消えする場合は <= を >= に変える
+    if (area2 <= 0.0) continue;
+
+    // --- Zソート用の奥行き（v3 を使う。vw[f[3]]の混在は避ける）---
+    double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
+                    dot(v2 - cam, F) + dot(v3 - cam, F)) / 4.0;
+
+    draws.push_back({ depth, 0, [p0,p1,p2,p3,shaded]() {
+        Polygon{ Vec2{p0.x,p0.y}, Vec2{p1.x,p1.y},
+                 Vec2{p2.x,p2.y}, Vec2{p3.x,p3.y} }.draw(shaded);
+    }});
+}
 
 
 			// ── 辺を push ────────────────────
