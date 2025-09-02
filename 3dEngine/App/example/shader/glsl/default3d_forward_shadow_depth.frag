@@ -60,8 +60,13 @@ layout(std140) uniform PSShadow // slot 4
 
 void main()
 {
-	float depth = length(g_sunPosition - WorldPosition);
-	FragColor = vec2(depth, (depth * depth));
+        vec3 n = normalize(Normal);
+        vec3 v = normalize(g_eyePosition - WorldPosition);
+        float viewFactor = (1.0 - abs(dot(n, v)));
+        float bias = max((0.05 * (1.0 - dot(n, g_sunDirection))) + (0.02 * viewFactor), 0.005);
+        vec3 position = (WorldPosition + (n * bias));
+        float depth = length(g_sunPosition - position);
+        FragColor = vec2(depth, (depth * depth));
 }
 
 //

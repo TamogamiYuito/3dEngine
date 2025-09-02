@@ -91,8 +91,13 @@ cbuffer PSShadow : register(b4)
 
 float2 Depth_PS(s3d::PSInput input) : SV_TARGET
 {
-	const float depth = length(g_sunPosition - input.worldPosition);
-	return float2(depth, (depth * depth));
+        const float3 n = normalize(input.normal);
+        const float3 v = normalize(g_eyePosition - input.worldPosition);
+        const float viewFactor = (1.0 - abs(dot(n, v)));
+        const float bias = max((0.05 * (1.0 - dot(n, g_sunDirection))) + (0.02 * viewFactor), 0.005);
+        const float3 position = (input.worldPosition + (n * bias));
+        const float depth = length(g_sunPosition - position);
+        return float2(depth, (depth * depth));
 }
 //
 ////////////////////////////////////////////////////////////
@@ -114,41 +119,45 @@ float ReduceLightBleeding(float p_max, float amount)
 	return LineStep(amount, 1.0, p_max);
 }
 
-float CalculateShadow(float3 worldPosition)
+float CalculateShadow(float3 worldPosition, float3 normal)
 {
-	const float4 projectedPosition = mul(float4(worldPosition, 1.0), g_worldToProjectedShadow);
+        const float3 v = normalize(g_eyePosition - worldPosition);
+        const float viewFactor = (1.0 - abs(dot(normal, v)));
+        const float bias = max((0.05 * (1.0 - dot(normal, g_sunDirection))) + (0.02 * viewFactor), 0.005);
+        const float3 position = (worldPosition + (normal * bias));
+        const float4 projectedPosition = mul(float4(position, 1.0), g_worldToProjectedShadow);
 
 	if (any(saturate(projectedPosition.xyz) != projectedPosition.xyz))
 	{
 		return 1.0;
 	}
 	
-	const float2 uv = float2(projectedPosition.x, (1.0 - projectedPosition.y));
-	const float depth = (length(g_sunPosition - worldPosition) - 0.03125);
-	const float2 moments = g_texture1.Sample(g_sampler1, uv).rg;
+        const float2 uv = float2(projectedPosition.x, (1.0 - projectedPosition.y));
+        const float depth = length(g_sunPosition - position);
+        const float2 moments = g_texture1.Sample(g_sampler1, uv).rg;
 
 	if (depth <= moments.x)
 	{
 		return 1.0;
 	}
 
-	const float variance = (moments.y - (moments.x * moments.x));
-	const float d = (moments.x - depth);
-	const float lit = (variance / (variance + (d * d)));
+        const float variance = (moments.y - (moments.x * moments.x));
+        const float d = (moments.x - depth);
+        const float lit = (variance / (variance + (d * d)));
 
 	return ReduceLightBleeding(lit, g_lightBleedingReduction);
 }
 
 float4 Shading_PS(s3d::PSInput input) : SV_TARGET
 {
-	// Shadow
-	const float lit = CalculateShadow(input.worldPosition);
+        // Shadow
+        const float3 n = normalize(input.normal);
+        const float lit = CalculateShadow(input.worldPosition, n);
 
-	const float3 lightColor = (g_sunColor * lit);
-	const float3 lightDirection = g_sunDirection;
+        const float3 lightColor = (g_sunColor * lit);
+        const float3 lightDirection = g_sunDirection;
 
-	const float3 n = normalize(input.normal);
-	const float3 l = lightDirection;
+        const float3 l = lightDirection;
 	float4 diffuseColor = GetDiffuseColor(input.uv);
 	const float3 ambientColor = (g_ambientColor * g_globalAmbientColor);
 
