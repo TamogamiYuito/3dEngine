@@ -102,7 +102,7 @@ float CalculateShadow(vec3 worldPosition, vec3 normal)
         vec3 v = normalize(g_eyePosition - worldPosition);
         float viewFactor = (1.0 - abs(dot(normal, v)));
         float bias = max((0.05 * (1.0 - dot(normal, g_sunDirection))) + (0.02 * viewFactor), 0.005);
-        vec3 position = (worldPosition + (normal * bias));
+        vec3 position = (worldPosition - (normal * bias));
         vec4 projectedPosition = (vec4(position, 1.0) * g_worldToProjectedShadow);
 
 	if (any(notEqual(clamp(projectedPosition.xyz, 0.0, 1.0), projectedPosition.xyz)))

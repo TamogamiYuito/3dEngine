@@ -95,7 +95,7 @@ float2 Depth_PS(s3d::PSInput input) : SV_TARGET
         const float3 v = normalize(g_eyePosition - input.worldPosition);
         const float viewFactor = (1.0 - abs(dot(n, v)));
         const float bias = max((0.05 * (1.0 - dot(n, g_sunDirection))) + (0.02 * viewFactor), 0.005);
-        const float3 position = (input.worldPosition + (n * bias));
+        const float3 position = (input.worldPosition - (n * bias));
         const float depth = length(g_sunPosition - position);
         return float2(depth, (depth * depth));
 }
@@ -124,7 +124,7 @@ float CalculateShadow(float3 worldPosition, float3 normal)
         const float3 v = normalize(g_eyePosition - worldPosition);
         const float viewFactor = (1.0 - abs(dot(normal, v)));
         const float bias = max((0.05 * (1.0 - dot(normal, g_sunDirection))) + (0.02 * viewFactor), 0.005);
-        const float3 position = (worldPosition + (normal * bias));
+        const float3 position = (worldPosition - (normal * bias));
         const float4 projectedPosition = mul(float4(position, 1.0), g_worldToProjectedShadow);
 
 	if (any(saturate(projectedPosition.xyz) != projectedPosition.xyz))
