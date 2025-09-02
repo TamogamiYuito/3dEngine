@@ -574,7 +574,13 @@ void Game::run() {
                                 V3 v1 = vw[f[1]];
                                 V3 v2 = vw[f[2]];
                                 V3 v3 = vw[f[3]];
-                                V3 nW = norm(cross(v1 - v0, v2 - v0));
+                                // Ensure face normals point outward even if
+                                // the winding order of the vertices is
+                                // inverted. By reversing the cross product
+                                // arguments we effectively flip the normal
+                                // direction which corrects the lighting
+                                // calculations.
+                                V3 nW = norm(cross(v2 - v0, v1 - v0));
                                 V3 center = (v0 + v1 + v2 + v3) / 4.0;
 								const double AMBIENT = 0.15;       // 適当に 0.0〜0.3
 								double shade = AMBIENT;
