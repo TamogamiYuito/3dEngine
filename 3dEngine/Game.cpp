@@ -564,46 +564,57 @@ void Game::run() {
             }
 			
 
-            for (const auto& f : FACE) {
+			for (const auto& f : FACE) {
+				V3 v0 = vw[f[0]];
+				V3 v1 = vw[f[1]];
+				V3 v2 = vw[f[2]];
+				V3 v3 = vw[f[3]];
 
-                               V3 v0 = vw[f[0]];
-                               V3 v1 = vw[f[1]];
-                               V3 v2 = vw[f[2]];
-                               V3 v3 = vw[f[3]];
-                               // Compute outward-facing normal using the
-                               // standard right-handed winding order of the
-                               // face vertices.
-                               V3 nW = norm(cross(v1 - v0, v2 - v0));
-                               V3 center = (v0 + v1 + v2 + v3) / 4.0;
-								const double AMBIENT = 0.15;       // 適当に 0.0〜0.3
-								double shade = AMBIENT;
+				// ✅ 右手系: v0→v1 × v0→v2（外向き）
+				V3 nW = norm(cross(v1 - v0, v2 - v0));
 
-								for (const auto& lt : lights)
-								{
-									V3  L = -1 * lt.dir();                    // 光の入射方向（無限遠）
-									double diff = Max(0.0, dot(nW, L));   // 拡散係数
-									shade += lt.intensity * diff;         // intensity そのまま
-								}
+				V3 center = (v0 + v1 + v2 + v3) / 4.0;
 
-								/* 明度を 0〜2 にクランプ（強度 5 の伸びしろ確保） */
-								shade = Clamp(shade, 0.0, 2.0);
-								ColorF shaded = col * shade;
+				// ===== ライティング =====
+				const double AMBIENT = 0.15;
+				double shade = AMBIENT;
 
+				for (const auto& lt : lights) {
+					// lt.dir() が「光の向き（ライト→シーン）」なら、入射方向は -dir()
+					V3 L = -1 * lt.dir();
+					L = norm(L);              // 念のため正規化（dir() が正規化済みでも安全）
+					double diff = Max(0.0, dot(nW, L));
+					shade += lt.intensity * diff;
+				}
 
+				// ===== バックフェースカリング =====
+				// （正規化は不要だが、入れても OK。符号は変わらない）
+				V3 toCam = (cam - center);
+				if (dot(nW, toCam) >= 0.0) {
+					continue; // 裏面は描画しない
+				}
 
-                if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
-                    std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
-				double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
-								dot(v2 - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
-				bool isSel = (idx == sel);
-				shaded = col * shade;
-                                auto p0 = vp[f[0]]; auto p1 = vp[f[1]];
-                                auto p2 = vp[f[2]]; auto p3 = vp[f[3]];
-                                draws.push_back({ depth, 0, [p0,p1,p2,p3,shaded]() {
-                                        Polygon{ Vec2{p0.x,p0.y}, Vec2{p1.x,p1.y},
-                                                 Vec2{p2.x,p2.y}, Vec2{p3.x,p3.y} }.draw(shaded);
-                                } });
-                        }
+				// ===== 描画 =====
+				shade = Clamp(shade, 0.0, 2.0);
+				ColorF shaded = col * shade;
+
+				if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
+					std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) {
+					continue;
+				}
+
+				// depth の最後だけ vw[...] を使っていたので統一（バグの温床防止）
+				double depth =
+					(dot(v0 - cam, F) + dot(v1 - cam, F) +
+					 dot(v2 - cam, F) + dot(v3 - cam, F)) / 4.0;
+
+				auto p0 = vp[f[0]], p1 = vp[f[1]], p2 = vp[f[2]], p3 = vp[f[3]];
+				draws.push_back({ depth, 0, [p0,p1,p2,p3,shaded]() {
+					Polygon{ Vec2{p0.x,p0.y}, Vec2{p1.x,p1.y},
+							 Vec2{p2.x,p2.y}, Vec2{p3.x,p3.y} }.draw(shaded);
+				} });
+			}
+
 
 
 			// ── 辺を push ────────────────────
