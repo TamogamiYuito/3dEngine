@@ -577,18 +577,19 @@ void Game::run() {
 
     // 2) 「外向き」に矯正（キューブ中心から面中心へのベクトルと同じ向き）
     V3 outDir = center - cb.c;                   // キューブ中心→面中心（外向き）
-    if (dot(nW, outDir) < 0.0) - 1 * nW = nW;         // 反転して外向きに統一
+    if (dot(nW, outDir) < 0.0)
+        nW = -nW;         // 反転して外向きに統一
     nW = norm(nW);
 
     // 3) ライティング用：画面に見えているなら常にカメラ側を向かせる
     V3 toCam = cam - center;
-    V3 nLit  = (dot(nW, toCam) < 0.0) ? -1 * nW : nW;
+    V3 nLit  = (dot(nW, toCam) < 0.0) ? -nW : nW;
 
     // --- ライティング ---
     const double AMBIENT = 0.15;
     double shade = AMBIENT;
     for (const auto& lt : lights) {
-        V3 L = -1 * lt.dir();                 // DirLightの入射方向（ライト→物体）= -dir()
+        V3 L = -lt.dir();                 // DirLightの入射方向（ライト→物体）= -dir()
         L = norm(L);
         shade += lt.intensity * Max(0.0, dot(nLit, L));
     }
@@ -608,9 +609,9 @@ void Game::run() {
     //if (area2 >= 0.0) continue;
 
 
-	if (dot(nW, (cam + center)) > 0.0) {
-		continue; // カメラから見て裏面は描かない
-	}
+        if (dot(nW, toCam) > 0.0) {
+                continue; // カメラから見て裏面は描かない
+        }
 
     // --- Zソート用の奥行き（v3 を使う。vw[f[3]]の混在は避ける）---
     double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
