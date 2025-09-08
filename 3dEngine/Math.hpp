@@ -23,6 +23,22 @@ inline V3      cross(V3 a, V3 b) {
 inline double  len(V3 v) { return std::sqrt(dot(v, v)); }
 inline V3      norm(V3 v) { double l = len(v); return (l > 1e-9) ? v / l : V3{ 0,0,0 }; }
 
+
+// Math.hpp（追記）
+inline double lengthSq(const V3& v) noexcept {
+	return v.x * v.x + v.y * v.y + v.z * v.z;
+}
+inline double length(const V3& v) noexcept {
+	return std::sqrt(lengthSq(v));
+}
+// 必要なら（既に norm があれば不要）
+inline V3 normalize_safe(const V3& v) noexcept {
+	double ls = lengthSq(v);
+	if (ls <= 0.0) return V3{ 0,0,0 };
+	double inv = 1.0 / std::sqrt(ls);
+	return V3{ v.x * inv, v.y * inv, v.z * inv };
+}
+
 struct P2 {
     double x, y;
 };

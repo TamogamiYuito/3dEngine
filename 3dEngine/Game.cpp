@@ -570,35 +570,63 @@ void Game::run() {
 
             for (const auto& f : FACE) {
 
-                                V3 v0 = vw[f[0]];
-                                V3 v1 = vw[f[1]];
-                                V3 v2 = vw[f[2]];
-                                V3 v3 = vw[f[3]];
-                                V3 nW = norm(cross(v1 - v0, v2 - v0));
-                                V3 center = (v0 + v1 + v2 + v3) / 4.0;
-								const double AMBIENT = 0.15;       // 適当に 0.0〜0.3
-								double shade = AMBIENT;
+				V3 v0 = vw[f[0]];
+				V3 v1 = vw[f[1]];
+				V3 v2 = vw[f[2]];
+				V3 v3 = vw[f[3]];
 
-								for (const auto& lt : lights)
-								{
-									V3  L = -1 * lt.dir();                    // 光の入射方向（無限遠）
-									double diff = Max(0.0, dot(nW, L));   // 拡散係数
-									shade += lt.intensity * diff;         // intensity そのまま
-								}
+				// 法線（既存の norm/cross を利用）
+				V3 nW = norm(cross(v1 - v0, v2 - v0));
 
-								/* 明度を 0〜2 にクランプ（強度 5 の伸びしろ確保） */
-								shade = Clamp(shade, 0.0, 2.0);
-								ColorF shaded = col * shade;
+				// 面中心（backface 判定と view ベクトルに使う）
+				V3 center = (v0 + v1 + v2 + v3) * 0.25;
 
+				// 裏面カリング（正規化不要。平行時に消えないよう <= を避ける）
+				constexpr double BACKFACE_EPS = 1e-6; // かなり小さい
+				double nd = dot(nW, (cam - center));
 
+				// 完全にカメラの逆を向いているときだけスキップ
+				if (nd < -BACKFACE_EPS) {
+					continue;
+				}
 
-                if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
-                    std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) continue;
-				double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
-								dot(v2 - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
+				// 深度（距離の二乗平均。lengthSq を使うか直接計算）
+				double d0 = lengthSq(v0 - cam);
+				double d1 = lengthSq(v1 - cam);
+				double d2 = lengthSq(v2 - cam);
+				double d3 = lengthSq(v3 - cam);
+				double depth = (d0 + d1 + d2 + d3) * 0.25;
+
+				
+				
+								
+
+				const double AMBIENT = 0.15;       // 適当に 0.0〜0.3
+				double shade = AMBIENT;
+				for (const auto& lt : lights)
+				{
+					V3  L = -1 * lt.dir();                    // 光の入射方向（無限遠）
+					double diff = Max(0.0, dot(nW, L));   // 拡散係数
+					shade += lt.intensity * diff;         // intensity そのまま
+				}
+
+				/* 明度を 0〜2 にクランプ（強度 5 の伸びしろ確保） */
+				shade = Clamp(shade, 0.0, 2.0);
+
+				
+             
 				bool isSel = (idx == sel);
-				shaded = col * shade;
+
+				nd = dot(nW, (cam - center));
+				bool isBack = (nd < 0);
+
+				ColorF shaded = col * shade;
+				if (isBack) {
+					shaded = shaded * 0.3; // 裏面は暗くする（0.0～1.0で調整）
+				}
+
 				faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] }, shaded, isSel });
+
 			}
 
 
@@ -617,11 +645,11 @@ void Game::run() {
 
 		constexpr double DEP_TOL = 1e-6;    // 「ほぼ同じ深度」とみなす閾値
 
-		std::sort(faces.begin(), faces.end(),
-		  [](auto& a, auto& b) { return a.d < b.d; });
-        for (const auto& fc : faces)
-            Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
-                     Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
+		std::sort(faces.begin(), faces.end(), [](const auto& a, const auto& b) { return a.d > b.d; });
+
+		for (const auto& fc : faces)
+			Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
+					 Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
 
 
         std::stable_sort(edges.begin(), edges.end(),
