@@ -388,24 +388,13 @@ void Game::run() {
         }
 
 		if (free && MouseL.down()) {
-			// まずオブジェクトの選択を先に処理する
-			if (hoverIdx != -1 || hoverLightIdx != -1)
-			{
-				// 奥行きを比較して手前にある方を選択
-				const double dc = (hoverIdx != -1) ? len(cubes[hoverIdx].c - cam) : 1e9;
-				const double dl = (hoverLightIdx != -1) ? len(lights[hoverLightIdx].c - cam) : 1e9;
-
-				const bool pickLight = (dl < dc);
-
-				if (pickLight) { lightSel = hoverLightIdx; sel = -1; }
-				else { sel = hoverIdx;           lightSel = -1; }
-			}
-
-			// 選択後に drag 開始処理（ギズモクリック）を判定する
+			// まずギズモがクリックされているか確認（優先）
 			if (hoverHd != Handle::None && (sel != -1 || lightSel != -1)) {
 				activeHd = hoverHd;
 				drag.on = true;
 				drag.cur0 = cur;
+
+				// ギズモ操作対象の設定
 				if (sel != -1) {
 					Cube& cb = cubes[sel];
 					drag.p0 = cb.c;
@@ -414,34 +403,49 @@ void Game::run() {
 					if (activeHd == Handle::MoveX || activeHd == Handle::MoveZ)
 						grid.erase({ gIdx(cb.c.x), gIdx(cb.c.z) });
 				}
-				else {
+				else if (lightSel != -1) {
 					Light& lt = lights[lightSel];
 					drag.p0 = lt.c;
 					drag.q0 = lt.q;
 					drag.s0 = lt.s;
 				}
 
-				if (activeHd == Handle::MoveX || activeHd == Handle::MoveY
-				 || activeHd == Handle::MoveZ || activeHd == Handle::ScaleX
-				 || activeHd == Handle::ScaleY || activeHd == Handle::ScaleZ) {
+				// 移動・スケール用の軸計算
+				if (activeHd == Handle::MoveX || activeHd == Handle::MoveY || activeHd == Handle::MoveZ ||
+					activeHd == Handle::ScaleX || activeHd == Handle::ScaleY || activeHd == Handle::ScaleZ) {
+
 					V3 axLocal = (activeHd == Handle::MoveX || activeHd == Handle::ScaleX) ? V3{ 1,0,0 } :
 						(activeHd == Handle::MoveY || activeHd == Handle::ScaleY) ? V3{ 0,1,0 } :
 						V3{ 0,0,1 };
 					V3 ax = (activeHd == Handle::ScaleX || activeHd == Handle::ScaleY || activeHd == Handle::ScaleZ)
 						? qRotate(drag.q0, axLocal) : axLocal;
+
 					P2 p0 = scr(drag.p0), p1 = scr(drag.p0 + ax);
 					drag.lenPx = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).length();
 					if (drag.lenPx < 1) drag.lenPx = 1;
 				}
+
+				// 回転用の軸計算
 				if (activeHd == Handle::RotateX || activeHd == Handle::RotateY || activeHd == Handle::RotateZ) {
-					V3 axLocal = (activeHd == Handle::RotateX) ? V3{ 1,0,0 }
-						: (activeHd == Handle::RotateY) ? V3{ 0,1,0 }
-					: V3{ 0,0,1 };
+					V3 axLocal = (activeHd == Handle::RotateX) ? V3{ 1,0,0 } :
+						(activeHd == Handle::RotateY) ? V3{ 0,1,0 } : V3{ 0,0,1 };
 					drag.axis = qRotate(drag.q0, axLocal);
 					drag.ang0 = cursorAngle(cur, drag.axis, drag.p0).value_or(0.0);
 				}
 			}
+			else {
+				// ギズモがクリックされていなければオブジェクト選択
+				if (hoverIdx != -1 || hoverLightIdx != -1) {
+					const double dc = (hoverIdx != -1) ? len(cubes[hoverIdx].c - cam) : 1e9;
+					const double dl = (hoverLightIdx != -1) ? len(lights[hoverLightIdx].c - cam) : 1e9;
+					const bool pickLight = (dl < dc);
+
+					if (pickLight) { lightSel = hoverLightIdx; sel = -1; }
+					else { sel = hoverIdx; lightSel = -1; }
+				}
+			}
 		}
+
 
         if (free && MouseL.up()) {
             if (drag.on && sel != -1 && (activeHd == Handle::MoveX || activeHd == Handle::MoveZ)) {
@@ -647,158 +651,164 @@ void Game::run() {
             }
         }
 
-        /*--- ギズモ ---*/
-        if (free && sel != -1) {
-            const Cube& cb = cubes[sel];
-            const double L = HALF * std::max({ cb.s.x, cb.s.y, cb.s.z }) * 1.5;
-            P2 ctr = scr(cb.c); if (std::isinf(ctr.x)) continue;
+        
+		/*--- ギズモ ---*/
+		if (free && sel != -1) {
+			const Cube& cb = cubes[sel];
+			const double L = HALF * std::max({ cb.s.x, cb.s.y, cb.s.z }) * 1.5;
+			P2 ctr = scr(cb.c); if (std::isinf(ctr.x)) continue;
 
-            /* Move / Scale */
-            if (mode == Mode::Move || mode == Mode::Scale) {
-                struct Ax { V3 d; Color col; Handle mv, sc; };
-                const Ax AX[3] = {
-                    { {1,0,0}, Palette::Red,   Handle::MoveX, Handle::ScaleX },
-                    { {0,1,0}, Palette::Green, Handle::MoveY, Handle::ScaleY },
-                    { {0,0,1}, Palette::Blue,  Handle::MoveZ, Handle::ScaleZ }
-                };
-                for (const auto& a : AX) {
-                    V3 dir = (mode == Mode::Scale) ? qRotate(cb.q, a.d) : a.d;
-                    double sc = (a.d.x != 0) ? cb.s.x : (a.d.y != 0) ? cb.s.y : cb.s.z;
-                    P2 tip = scr(cb.c + dir * (HALF * 1.5 * sc)); if (std::isinf(tip.x)) continue;
-                    bool hot = (hoverHd == a.mv || hoverHd == a.sc
-                                 || activeHd == a.mv || activeHd == a.sc);
+			/* Move / Scale */
+			if (mode == Mode::Move || mode == Mode::Scale) {
+				struct Ax { V3 d; Color col; Handle mv, sc; };
+				const Ax AX[3] = {
+					{ {1,0,0}, Palette::Red,   Handle::MoveX, Handle::ScaleX },
+					{ {0,1,0}, Palette::Green, Handle::MoveY, Handle::ScaleY },
+					{ {0,0,1}, Palette::Blue,  Handle::MoveZ, Handle::ScaleZ }
+				};
+				for (const auto& a : AX) {
+					V3 dir = (mode == Mode::Scale) ? qRotate(cb.q, a.d) : a.d;
+					double sc = (a.d.x != 0) ? cb.s.x : (a.d.y != 0) ? cb.s.y : cb.s.z;
+					P2 tip = scr(cb.c + dir * (HALF * 1.5 * sc)); if (std::isinf(tip.x)) continue;
+					bool hot = (hoverHd == a.mv || hoverHd == a.sc
+								 || activeHd == a.mv || activeHd == a.sc);
 
-                    ColorF c = a.col; c.a = hot ? 1.0 : 0.4;
-                    Line{ ctr.x,ctr.y, tip.x,tip.y }.draw(hot ? 4 : 3, c);
+					ColorF c = a.col; c.a = hot ? 1.0 : 0.4;
+					Line{ ctr.x,ctr.y, tip.x,tip.y }.draw(hot ? 4 : 3, c);
 
-                    if (mode == Mode::Move) {
-                        Vec2 v2 = (Vec2{ tip.x,tip.y } - Vec2{ ctr.x,ctr.y }).normalized() * 8;
-                        Vec2 n{ -v2.y,v2.x };
-                        Polygon{ Vec2{tip.x,tip.y},
-                                 Vec2{tip.x,tip.y} - v2 * 2 + n,
-                                 Vec2{tip.x,tip.y} - v2 * 2 - n }.draw(c);
-                    } else /* Scale */ {
-                        RectF{ tip.x - 4, tip.y - 4, 8,8 }.draw(c);
-                    }
-                }
-                if (mode == Mode::Scale) {
-                    bool hot = (hoverHd == Handle::ScaleUniform
-                                || activeHd == Handle::ScaleUniform);
-                    ColorF cu = hot ? ColorF(Palette::White)
-                                    : ColorF{ 1,1,1,0.4 };
-                    Circle{ ctr.x,ctr.y,5 }.drawFrame(2, cu);
-                }
-            }
+					if (mode == Mode::Move) {
+						Vec2 v2 = (Vec2{ tip.x,tip.y } - Vec2{ ctr.x,ctr.y }).normalized() * 8;
+						Vec2 n{ -v2.y,v2.x };
+						Polygon{ Vec2{tip.x,tip.y},
+								 Vec2{tip.x,tip.y} - v2 * 2 + n,
+								 Vec2{tip.x,tip.y} - v2 * 2 - n }.draw(c);
+					}
+					else /* Scale */ {
+						RectF{ tip.x - 4, tip.y - 4, 8,8 }.draw(c);
+					}
+				}
+				if (mode == Mode::Scale) {
+					bool hot = (hoverHd == Handle::ScaleUniform
+								|| activeHd == Handle::ScaleUniform);
+					ColorF cu = hot ? ColorF(Palette::White)
+						: ColorF{ 1,1,1,0.4 };
+					Circle{ ctr.x,ctr.y,5 }.drawFrame(2, cu);
+				}
+			}
 
-            /* Rotate */
-            if (mode == Mode::Rotate) {
-                struct Ring { Handle hd; Color col; };
-                const Ring RG[3] = {
-                    { Handle::RotateX, Palette::Red   },
-                    { Handle::RotateY, Palette::Green },
-                    { Handle::RotateZ, Palette::Blue  }
-                };
-                constexpr int SEG = 64;
-                for (auto r : RG) {
-                    bool hot = (hoverHd == r.hd || activeHd == r.hd);
-                    ColorF col = r.col; col.a = hot ? 1.0 : 0.4;
-                    for (int k = 0; k < SEG; ++k) {
-                        double a0 = Math::TwoPi * k / SEG,
-                               a1 = Math::TwoPi * (k + 1) / SEG;
-                        V3 p0, p1;
-                        if (r.hd == Handle::RotateX) {
-                            p0 = qRotate(cb.q, { 0,std::sin(a0) * L,std::cos(a0) * L });
-                            p1 = qRotate(cb.q, { 0,std::sin(a1) * L,std::cos(a1) * L });
-                        } else if (r.hd == Handle::RotateY) {
-                            p0 = qRotate(cb.q, { std::sin(a0) * L,0,std::cos(a0) * L });
-                            p1 = qRotate(cb.q, { std::sin(a1) * L,0,std::cos(a1) * L });
-                        } else {
-                            p0 = qRotate(cb.q, { std::sin(a0) * L,std::cos(a0) * L,0 });
-                            p1 = qRotate(cb.q, { std::sin(a1) * L,std::cos(a1) * L,0 });
-                        }
-                        P2 s0 = scr(cb.c + p0), s1 = scr(cb.c + p1);
-                        if (!std::isinf(s0.x) && !std::isinf(s1.x))
-                            Line{ s0.x,s0.y, s1.x,s1.y }.draw(hot ? 3 : 2, col);
-                    }
-                }
-            }
-        }
-        else if (free && lightSel != -1) {
-            const Light& cb = lights[lightSel];
-            const double L = HALF * std::max({ cb.s.x, cb.s.y, cb.s.z }) * 1.5;
-            P2 ctr = scr(cb.c); if (std::isinf(ctr.x)) continue;
+			/* Rotate */
+			if (mode == Mode::Rotate) {
+				struct Ring { Handle hd; Color col; };
+				const Ring RG[3] = {
+					{ Handle::RotateX, Palette::Red   },
+					{ Handle::RotateY, Palette::Green },
+					{ Handle::RotateZ, Palette::Blue  }
+				};
+				constexpr int SEG = 64;
+				for (auto r : RG) {
+					bool hot = (hoverHd == r.hd || activeHd == r.hd);
+					ColorF col = r.col; col.a = hot ? 1.0 : 0.4;
+					for (int k = 0; k < SEG; ++k) {
+						double a0 = Math::TwoPi * k / SEG,
+							a1 = Math::TwoPi * (k + 1) / SEG;
+						V3 p0, p1;
+						if (r.hd == Handle::RotateX) {
+							p0 = qRotate(cb.q, { 0,std::sin(a0) * L,std::cos(a0) * L });
+							p1 = qRotate(cb.q, { 0,std::sin(a1) * L,std::cos(a1) * L });
+						}
+						else if (r.hd == Handle::RotateY) {
+							p0 = qRotate(cb.q, { std::sin(a0) * L,0,std::cos(a0) * L });
+							p1 = qRotate(cb.q, { std::sin(a1) * L,0,std::cos(a1) * L });
+						}
+						else {
+							p0 = qRotate(cb.q, { std::sin(a0) * L,std::cos(a0) * L,0 });
+							p1 = qRotate(cb.q, { std::sin(a1) * L,std::cos(a1) * L,0 });
+						}
+						P2 s0 = scr(cb.c + p0), s1 = scr(cb.c + p1);
+						if (!std::isinf(s0.x) && !std::isinf(s1.x))
+							Line{ s0.x,s0.y, s1.x,s1.y }.draw(hot ? 3 : 2, col);
+					}
+				}
+			}
+		}
+		else if (free && lightSel != -1) {
+			const Light& cb = lights[lightSel];
+			const double L = HALF * std::max({ cb.s.x, cb.s.y, cb.s.z }) * 1.5;
+			P2 ctr = scr(cb.c); if (std::isinf(ctr.x)) continue;
 
-            /* Move / Scale */
-            if (mode == Mode::Move || mode == Mode::Scale) {
-                struct Ax { V3 d; Color col; Handle mv, sc; };
-                const Ax AX[3] = {
-                    { {1,0,0}, Palette::Red,   Handle::MoveX, Handle::ScaleX },
-                    { {0,1,0}, Palette::Green, Handle::MoveY, Handle::ScaleY },
-                    { {0,0,1}, Palette::Blue,  Handle::MoveZ, Handle::ScaleZ }
-                };
-                for (const auto& a : AX) {
-                    V3 dir = (mode == Mode::Scale) ? qRotate(cb.q, a.d) : a.d;
-                    double sc = (a.d.x != 0) ? cb.s.x : (a.d.y != 0) ? cb.s.y : cb.s.z;
-                    P2 tip = scr(cb.c + dir * (HALF * 1.5 * sc)); if (std::isinf(tip.x)) continue;
-                    bool hot = (hoverHd == a.mv || hoverHd == a.sc
-                                 || activeHd == a.mv || activeHd == a.sc);
+			/* Move / Scale */
+			if (mode == Mode::Move || mode == Mode::Scale) {
+				struct Ax { V3 d; Color col; Handle mv, sc; };
+				const Ax AX[3] = {
+					{ {1,0,0}, Palette::Red,   Handle::MoveX, Handle::ScaleX },
+					{ {0,1,0}, Palette::Green, Handle::MoveY, Handle::ScaleY },
+					{ {0,0,1}, Palette::Blue,  Handle::MoveZ, Handle::ScaleZ }
+				};
+				for (const auto& a : AX) {
+					V3 dir = (mode == Mode::Scale) ? qRotate(cb.q, a.d) : a.d;
+					double sc = (a.d.x != 0) ? cb.s.x : (a.d.y != 0) ? cb.s.y : cb.s.z;
+					P2 tip = scr(cb.c + dir * (HALF * 1.5 * sc)); if (std::isinf(tip.x)) continue;
+					bool hot = (hoverHd == a.mv || hoverHd == a.sc
+								 || activeHd == a.mv || activeHd == a.sc);
 
-                    ColorF c = a.col; c.a = hot ? 1.0 : 0.4;
-                    Line{ ctr.x,ctr.y, tip.x,tip.y }.draw(hot ? 4 : 3, c);
+					ColorF c = a.col; c.a = hot ? 1.0 : 0.4;
+					Line{ ctr.x,ctr.y, tip.x,tip.y }.draw(hot ? 4 : 3, c);
 
-                    if (mode == Mode::Move) {
-                        Vec2 v2 = (Vec2{ tip.x,tip.y } - Vec2{ ctr.x,ctr.y }).normalized() * 8;
-                        Vec2 n{ -v2.y,v2.x };
-                        Polygon{ Vec2{tip.x,tip.y},
-                                 Vec2{tip.x,tip.y} - v2 * 2 + n,
-                                 Vec2{tip.x,tip.y} - v2 * 2 - n }.draw(c);
-                    } else /* Scale */ {
-                        RectF{ tip.x - 4, tip.y - 4, 8,8 }.draw(c);
-                    }
-                }
-                if (mode == Mode::Scale) {
-                    bool hot = (hoverHd == Handle::ScaleUniform
-                                || activeHd == Handle::ScaleUniform);
-                    ColorF cu = hot ? ColorF(Palette::White)
-                                    : ColorF{ 1,1,1,0.4 };
-                    Circle{ ctr.x,ctr.y,5 }.drawFrame(2, cu);
-                }
-            }
+					if (mode == Mode::Move) {
+						Vec2 v2 = (Vec2{ tip.x,tip.y } - Vec2{ ctr.x,ctr.y }).normalized() * 8;
+						Vec2 n{ -v2.y,v2.x };
+						Polygon{ Vec2{tip.x,tip.y},
+								 Vec2{tip.x,tip.y} - v2 * 2 + n,
+								 Vec2{tip.x,tip.y} - v2 * 2 - n }.draw(c);
+					}
+					else /* Scale */ {
+						RectF{ tip.x - 4, tip.y - 4, 8,8 }.draw(c);
+					}
+				}
+				if (mode == Mode::Scale) {
+					bool hot = (hoverHd == Handle::ScaleUniform
+								|| activeHd == Handle::ScaleUniform);
+					ColorF cu = hot ? ColorF(Palette::White)
+						: ColorF{ 1,1,1,0.4 };
+					Circle{ ctr.x,ctr.y,5 }.drawFrame(2, cu);
+				}
+			}
 
-            /* Rotate */
-            if (mode == Mode::Rotate) {
-                struct Ring { Handle hd; Color col; };
-                const Ring RG[3] = {
-                    { Handle::RotateX, Palette::Red   },
-                    { Handle::RotateY, Palette::Green },
-                    { Handle::RotateZ, Palette::Blue  }
-                };
-                constexpr int SEG = 64;
-                for (auto r : RG) {
-                    bool hot = (hoverHd == r.hd || activeHd == r.hd);
-                    ColorF col = r.col; col.a = hot ? 1.0 : 0.4;
-                    for (int k = 0; k < SEG; ++k) {
-                        double a0 = Math::TwoPi * k / SEG,
-                               a1 = Math::TwoPi * (k + 1) / SEG;
-                        V3 p0, p1;
-                        if (r.hd == Handle::RotateX) {
-                            p0 = qRotate(cb.q, { 0,std::sin(a0) * L,std::cos(a0) * L });
-                            p1 = qRotate(cb.q, { 0,std::sin(a1) * L,std::cos(a1) * L });
-                        } else if (r.hd == Handle::RotateY) {
-                            p0 = qRotate(cb.q, { std::sin(a0) * L,0,std::cos(a0) * L });
-                            p1 = qRotate(cb.q, { std::sin(a1) * L,0,std::cos(a1) * L });
-                        } else {
-                            p0 = qRotate(cb.q, { std::sin(a0) * L,std::cos(a0) * L,0 });
-                            p1 = qRotate(cb.q, { std::sin(a1) * L,std::cos(a1) * L,0 });
-                        }
-                        P2 s0 = scr(cb.c + p0), s1 = scr(cb.c + p1);
-                        if (!std::isinf(s0.x) && !std::isinf(s1.x))
-                            Line{ s0.x,s0.y, s1.x,s1.y }.draw(hot ? 3 : 2, col);
-                    }
-                }
-            }
-        }
-
+			/* Rotate */
+			if (mode == Mode::Rotate) {
+				struct Ring { Handle hd; Color col; };
+				const Ring RG[3] = {
+					{ Handle::RotateX, Palette::Red   },
+					{ Handle::RotateY, Palette::Green },
+					{ Handle::RotateZ, Palette::Blue  }
+				};
+				constexpr int SEG = 64;
+				for (auto r : RG) {
+					bool hot = (hoverHd == r.hd || activeHd == r.hd);
+					ColorF col = r.col; col.a = hot ? 1.0 : 0.4;
+					for (int k = 0; k < SEG; ++k) {
+						double a0 = Math::TwoPi * k / SEG,
+							a1 = Math::TwoPi * (k + 1) / SEG;
+						V3 p0, p1;
+						if (r.hd == Handle::RotateX) {
+							p0 = qRotate(cb.q, { 0,std::sin(a0) * L,std::cos(a0) * L });
+							p1 = qRotate(cb.q, { 0,std::sin(a1) * L,std::cos(a1) * L });
+						}
+						else if (r.hd == Handle::RotateY) {
+							p0 = qRotate(cb.q, { std::sin(a0) * L,0,std::cos(a0) * L });
+							p1 = qRotate(cb.q, { std::sin(a1) * L,0,std::cos(a1) * L });
+						}
+						else {
+							p0 = qRotate(cb.q, { std::sin(a0) * L,std::cos(a0) * L,0 });
+							p1 = qRotate(cb.q, { std::sin(a1) * L,std::cos(a1) * L,0 });
+						}
+						P2 s0 = scr(cb.c + p0), s1 = scr(cb.c + p1);
+						if (!std::isinf(s0.x) && !std::isinf(s1.x))
+							Line{ s0.x,s0.y, s1.x,s1.y }.draw(hot ? 3 : 2, col);
+					}
+				}
+			}
+		}
 
 
 		if (!free)
@@ -889,6 +899,8 @@ void Game::run() {
 				}
 			}
 
+
+
 			/* --- 描画順ソート --- */
 			std::stable_sort(qs.begin(), qs.end(),
 				[&](const QuadDraw& a, const QuadDraw& b)
@@ -926,6 +938,9 @@ void Game::run() {
 			/* --- エッジ --- */
 			for (const auto& e : es)
 				Line{ e.a.x, e.a.y, e.b.x, e.b.y }.draw(e.th, ColorF(Palette::Cyan));
+
+
+
 		}
     }
 }
