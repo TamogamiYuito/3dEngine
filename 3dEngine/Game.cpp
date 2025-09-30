@@ -901,7 +901,7 @@ void Game::run() {
 
 
 
-			/* --- 描画順ソート --- */
+			//描画順ソート
 			std::stable_sort(qs.begin(), qs.end(),
 				[&](const QuadDraw& a, const QuadDraw& b)
 				{
