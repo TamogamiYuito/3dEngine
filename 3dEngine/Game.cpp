@@ -1,6 +1,12 @@
 ﻿#include "Game.hpp"
 #include "RenderUtils.hpp"
 #include "Light.hpp"
+#include "Camera.hpp"
+#include "Cube.hpp"
+#include "Gizmo.hpp"
+#include <vector>
+#include <unordered_set>
+#include <optional>
 #include <Siv3D.hpp>
 #include <algorithm>
 
