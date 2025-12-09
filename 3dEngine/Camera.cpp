@@ -49,8 +49,8 @@ void Camera::update(double dt, const s3d::Vec2& winF, const s3d::Point& winP) {
 
     if (free) {
         if (MouseR.pressed()) {
-            if (KeyW.pressed()) cam = cam + MOVE * dt * Fh;
-            if (KeyS.pressed()) cam = cam - MOVE * dt * Fh;
+            if (KeyW.pressed()) cam = cam - MOVE * dt * Fh;
+            if (KeyS.pressed()) cam = cam + MOVE * dt * Fh;
             if (KeyD.pressed()) cam = cam + MOVE * dt * Rv;
             if (KeyA.pressed()) cam = cam - MOVE * dt * Rv;
             if (KeyQ.pressed()) cam.y += MOVE * dt;
@@ -60,7 +60,7 @@ void Camera::update(double dt, const s3d::Vec2& winF, const s3d::Point& winP) {
             Vec2 d = Cursor::DeltaF();
             cam = cam - (d.x * Rv - d.y * U) * (PAN_SPD * dt / 8);
         }
-        if (double w = Mouse::Wheel(); w != 0.0) cam = cam + F * w * DOLLY_SPD * dt;
+        if (double w = Mouse::Wheel(); w != 0.0) cam = cam - F * w * DOLLY_SPD * dt;
         pos = cam;
     }
 }

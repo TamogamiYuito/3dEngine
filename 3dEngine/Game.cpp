@@ -48,7 +48,7 @@ void Game::handleCreationUI(const FrameContext& ctx, double dt, bool free) {
         V3 Fh = camera.forwardH();
         V3 Rv = camera.right();
         double ang = Random(-Math::Pi / 4.0, Math::Pi / 4.0);
-        V3 dir = norm(std::cos(ang) * Fh + std::sin(ang) * Rv);
+        V3 dir = norm(std::cos(ang) * (-1 * Fh) + std::sin(ang) * Rv);
         double dist = Random(2.0, 4.0) * (2.0 * HALF);
         double yRand = Random(0, 2) * (2.0 * HALF);
         V3 hit = V3{ ctx.cam.x, yRand, ctx.cam.z } + dist * dir;
