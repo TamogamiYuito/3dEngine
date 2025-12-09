@@ -26,13 +26,14 @@ inline V3      norm(V3 v) { double l = len(v); return (l > 1e-9) ? v / l : V3{ 0
 struct P2 {
     double x, y;
 };
+constexpr double CAM_DIST = 300;
 constexpr double FOCAL = 400;
 // Move the near clip plane even closer to the camera so objects do not
 // disappear when the camera is very near.
 constexpr double NEAR_Z = 0.01;
 inline P2 project(V3 v, double cx, double cy) {
-    double z = v.z;
-    if (z <= NEAR_Z) {
+    double z = v.z + CAM_DIST;
+    if (z < NEAR_Z) {
         const double inf = std::numeric_limits<double>::infinity();
         return { inf, inf };
     }

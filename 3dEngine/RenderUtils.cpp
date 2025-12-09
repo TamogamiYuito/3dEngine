@@ -4,7 +4,7 @@
 
 P2 screenProject(V3 world, V3 cam, V3 Rv, V3 U, V3 F, double cx, double cy) {
     V3 r = world - cam;
-    return project({ dot(r,Rv), dot(r,U), dot(r,F) }, cx, cy);
+    return project({ dot(r,Rv), dot(r,U), -dot(r,F) }, cx, cy);
 }
 
 V3 rayFromCursor(s3d::Vec2 p, V3 Rv, V3 U, V3 F, const s3d::Vec2& winF) {
