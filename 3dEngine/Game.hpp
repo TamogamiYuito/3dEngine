@@ -41,6 +41,10 @@ private:
     FrameContext buildFrameContext(const s3d::Vec2& windowHalf) const;
     void updateModeState(bool free);
     void handleCreationUI(const FrameContext& ctx, double dt, bool free);
+    void tryCreateCube(const FrameContext& ctx);
+    void tryCreateLight(const FrameContext& ctx);
+    void cycleLightSelection();
+    void adjustSelectedLightIntensity(double dt);
     void updateHoverState(const FrameContext& ctx, bool free);
     void handleSelectionAndDragStart(const FrameContext& ctx, bool free);
     void handleDragEnd();

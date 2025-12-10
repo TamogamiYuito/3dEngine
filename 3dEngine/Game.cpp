@@ -44,48 +44,67 @@ void Game::handleCreationUI(const FrameContext& ctx, double dt, bool free) {
         return;
     }
 
-    if (SimpleGUI::Button(U"+ Cube", { 20,20 })) {
-        V3 Fh = camera.forwardH();
-        V3 Rv = camera.right();
-        double ang = Random(-Math::Pi / 4.0, Math::Pi / 4.0);
-        V3 dir = norm(std::cos(ang) * (-1 * Fh) + std::sin(ang) * Rv);
-        double dist = Random(2.0, 4.0) * (2.0 * HALF);
-        double yRand = Random(0, 2) * (2.0 * HALF);
-        V3 hit = V3{ ctx.cam.x, yRand, ctx.cam.z } + dist * dir;
-        GKey g{ gIdx(hit.x), gIdx(hit.z) };
-        GKey place = findNearestEmpty(g);
-        if (!grid.contains(place)) {
-            cubes.push_back({ { gPos(place.gx), yRand, gPos(place.gz) } });
-            grid.insert(place);
-        }
+    tryCreateCube(ctx);
+    tryCreateLight(ctx);
+    cycleLightSelection();
+    adjustSelectedLightIntensity(dt);
+}
+
+void Game::tryCreateCube(const FrameContext& ctx) {
+    if (!SimpleGUI::Button(U"+ Cube", { 20,20 })) {
+        return;
     }
 
-    if (SimpleGUI::Button(U"+ Light", { 20,50 })) {
-        Light lt;
-        lt.c = ctx.cam + ctx.forward * 100.0;
-        V3 from{ 0,-1,0 };
-        V3 to = norm(ctx.forward);
-        double cosA = dot(from, to);
-        if (cosA > 1.0) cosA = 1.0; if (cosA < -1.0) cosA = -1.0;
-        V3 axis = cross(from, to);
-        if (len(axis) < 1e-6) axis = { 1,0,0 };
-        double angle = std::acos(cosA);
-        lt.q = qAxisAngle(axis, angle);
-        lights.push_back(lt);
-        lightSel = static_cast<int>(lights.size()) - 1;
+    V3 Fh = camera.forwardH();
+    V3 Rv = camera.right();
+    double ang = Random(-Math::Pi / 4.0, Math::Pi / 4.0);
+    V3 dir = norm(std::cos(ang) * (-1 * Fh) + std::sin(ang) * Rv);
+    double dist = Random(2.0, 4.0) * (2.0 * HALF);
+    double yRand = Random(0, 2) * (2.0 * HALF);
+    V3 hit = V3{ ctx.cam.x, yRand, ctx.cam.z } + dist * dir;
+    GKey g{ gIdx(hit.x), gIdx(hit.z) };
+    GKey place = findNearestEmpty(g);
+    if (!grid.contains(place)) {
+        cubes.push_back({ { gPos(place.gx), yRand, gPos(place.gz) } });
+        grid.insert(place);
+    }
+}
+
+void Game::tryCreateLight(const FrameContext& ctx) {
+    if (!SimpleGUI::Button(U"+ Light", { 20,50 })) {
+        return;
     }
 
+    Light lt;
+    lt.c = ctx.cam + ctx.forward * 100.0;
+    V3 from{ 0,-1,0 };
+    V3 to = norm(ctx.forward);
+    double cosA = dot(from, to);
+    if (cosA > 1.0) cosA = 1.0; if (cosA < -1.0) cosA = -1.0;
+    V3 axis = cross(from, to);
+    if (len(axis) < 1e-6) axis = { 1,0,0 };
+    double angle = std::acos(cosA);
+    lt.q = qAxisAngle(axis, angle);
+    lights.push_back(lt);
+    lightSel = static_cast<int>(lights.size()) - 1;
+}
+
+void Game::cycleLightSelection() {
     if (KeyTab.down() && !lights.empty()) {
         lightSel = (lightSel + 1) % static_cast<int>(lights.size());
     }
+}
 
-    if (lightSel != -1) {
-        if (KeyZ.pressed())
-            lights[lightSel].intensity = std::max(0.0, lights[lightSel].intensity - dt);
-        if (KeyX.pressed())
-            lights[lightSel].intensity += dt;
-        SimpleGUI::Slider(U"Intensity", lights[lightSel].intensity, 0.0, 5.0, Vec2{ 20,80 });
+void Game::adjustSelectedLightIntensity(double dt) {
+    if (lightSel == -1) {
+        return;
     }
+
+    if (KeyZ.pressed())
+        lights[lightSel].intensity = std::max(0.0, lights[lightSel].intensity - dt);
+    if (KeyX.pressed())
+        lights[lightSel].intensity += dt;
+    SimpleGUI::Slider(U"Intensity", lights[lightSel].intensity, 0.0, 5.0, Vec2{ 20,80 });
 }
 
 void Game::updateHoverState(const FrameContext& ctx, bool free) {
