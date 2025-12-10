@@ -33,10 +33,19 @@ constexpr double FOCAL = 400;
 constexpr double NEAR_Z = 0.01;
 inline P2 project(V3 v, double cx, double cy) {
     double z = v.z + CAM_DIST;
-    if (z < NEAR_Z) {
+
+    // Cull geometry that ends up behind the camera entirely.
+    if (z <= 0.0) {
         const double inf = std::numeric_limits<double>::infinity();
         return { inf, inf };
     }
+
+    // If a vertex crosses the near plane, clamp it to avoid the entire face
+    // disappearing when only part of it is behind the near clip distance.
+    if (z < NEAR_Z) {
+        z = NEAR_Z;
+    }
+
     return { (FOCAL * v.x) / z + cx,  -(FOCAL * v.y) / z + cy };
 }
 
