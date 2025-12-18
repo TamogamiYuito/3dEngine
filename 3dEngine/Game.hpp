@@ -49,9 +49,11 @@ private:
     void handleSelectionAndDragStart(const FrameContext& ctx, bool free);
     void handleDragEnd();
     void updateDrag(const FrameContext& ctx);
+    void processInput(const FrameContext& ctx, double dt, bool free);
+    void updateSimulation(double dt, bool free);
+    void drawFrame(const FrameContext& ctx, bool free);
     int detectHoveredCube(const s3d::Vec2& cur, double cx, double cy);
     int detectHoveredLight(const Vec2& cur, double cx, double cy, bool free);
     void handleFPSMovement(double dt);
     GKey findNearestEmpty(GKey start);
 };
-
