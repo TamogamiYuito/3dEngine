@@ -624,7 +624,7 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
             double shade = AMBIENT;
 
             for (const auto& lt : lights) {
-                V3 L = -1 * lt.dir();
+                V3 L = lt.dir();
                 double diff = Max(0.0, dot(nW, L));
                 shade += lt.intensity * diff;
             }
