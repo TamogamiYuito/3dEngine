@@ -610,6 +610,9 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
             V3 v2 = vw[f[2]];
             V3 v3 = vw[f[3]];
             V3 nW = norm(cross(v1 - v0, v2 - v0));
+            if (dot(nW, cam - v0) < 0.0) {
+                nW = -1 * nW;
+            }
             const double AMBIENT = 0.15;
             double shade = AMBIENT;
 
