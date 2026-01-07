@@ -12,6 +12,67 @@
 
 using namespace s3d;
 
+namespace {
+    constexpr double kNearPlane = NEAR_Z - CAM_DIST;
+
+    bool isInsideNearPlane(const V3& v) {
+        return v.z >= kNearPlane;
+    }
+
+    V3 intersectNearPlane(const V3& a, const V3& b) {
+        const double t = (kNearPlane - a.z) / (b.z - a.z);
+        return a + t * (b - a);
+    }
+
+    std::vector<V3> clipPolygonToNearPlane(const std::vector<V3>& input) {
+        if (input.empty()) {
+            return {};
+        }
+
+        std::vector<V3> output;
+        output.reserve(input.size() + 1);
+
+        V3 prev = input.back();
+        bool prevInside = isInsideNearPlane(prev);
+        for (const auto& curr : input) {
+            bool currInside = isInsideNearPlane(curr);
+            if (prevInside && currInside) {
+                output.push_back(curr);
+            } else if (prevInside && !currInside) {
+                output.push_back(intersectNearPlane(prev, curr));
+            } else if (!prevInside && currInside) {
+                output.push_back(intersectNearPlane(prev, curr));
+                output.push_back(curr);
+            }
+            prev = curr;
+            prevInside = currInside;
+        }
+
+        return output;
+    }
+
+    std::vector<std::array<V3, 3>> clipTriangleToNearPlane(const std::array<V3, 3>& tri) {
+        std::vector<V3> poly{ tri[0], tri[1], tri[2] };
+        std::vector<V3> clipped = clipPolygonToNearPlane(poly);
+        if (clipped.size() < 3) {
+            return {};
+        }
+        if (clipped.size() == 3) {
+            return { { clipped[0], clipped[1], clipped[2] } };
+        }
+        if (clipped.size() == 4) {
+            return { { clipped[0], clipped[1], clipped[2] },
+                     { clipped[0], clipped[2], clipped[3] } };
+        }
+        std::vector<std::array<V3, 3>> tris;
+        tris.reserve(clipped.size() - 2);
+        for (size_t i = 1; i + 1 < clipped.size(); ++i) {
+            tris.push_back({ clipped[0], clipped[i], clipped[i + 1] });
+        }
+        return tris;
+    }
+}
+
 P2 Game::FrameContext::project(V3 w) const {
     return screenProject(w, cam, right, up, forward, windowHalf.x, windowHalf.y);
 }
@@ -572,6 +633,8 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
     auto scr = [&](V3 w) { return ctx.project(w); };
     const V3 cam = ctx.cam;
     const V3 F = ctx.forward;
+    const V3 R = ctx.right;
+    const V3 U = ctx.up;
     const V3 pos = camera.pos;
 
     constexpr double DEPTH_EPS = 1e-4;
@@ -603,11 +666,14 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
         double th = (idx == sel) ? 3 : 1;
 
         std::array<V3, 8> vw;
+        std::array<V3, 8> vv;
         std::array<P2, 8> vp;
         for (int k = 0; k < 8; ++k) {
             V3 p = LOCAL[k] * cb.s;
             vw[k] = cb.c + qRotate(cb.q, p);
-            vp[k] = scr(vw[k]);
+            V3 r = vw[k] - cam;
+            vv[k] = { dot(r, R), dot(r, U), -dot(r, F) };
+            vp[k] = project(vv[k], ctx.windowHalf.x, ctx.windowHalf.y);
         }
 
         for (size_t fi = 0; fi < FACE.size(); ++fi) {
@@ -630,20 +696,24 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
             shade = Clamp(shade, 0.0, 2.0);
             ColorF shaded = col * shade;
 
-            if (std::isinf(vp[f[0]].x) || std::isinf(vp[f[1]].x) ||
-                std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) {
-                continue;
-            }
-            double depth0 = (dot(v0 - cam, F) + dot(v1 - cam, F) +
-                             dot(v2 - cam, F)) / 3.0;
-            double depth1 = (dot(v0 - cam, F) + dot(v2 - cam, F) +
-                             dot(v3 - cam, F)) / 3.0;
             bool isSel = (idx == sel);
             shaded = col * shade;
-            faces.push_back({ depth0, { vp[f[0]], vp[f[1]], vp[f[2]] }, shaded, isSel,
-                              idx, static_cast<int>(fi), 0 });
-            faces.push_back({ depth1, { vp[f[0]], vp[f[2]], vp[f[3]] }, shaded, isSel,
-                              idx, static_cast<int>(fi), 1 });
+            const std::array<std::array<int, 3>, 2> triIdx{ {
+                { f[0], f[1], f[2] },
+                { f[0], f[2], f[3] }
+            } };
+            for (int tri = 0; tri < 2; ++tri) {
+                std::array<V3, 3> triView{ vv[triIdx[tri][0]], vv[triIdx[tri][1]], vv[triIdx[tri][2]] };
+                auto clippedTris = clipTriangleToNearPlane(triView);
+                for (const auto& clipTri : clippedTris) {
+                    std::array<P2, 3> clipProj{ project(clipTri[0], ctx.windowHalf.x, ctx.windowHalf.y),
+                                                project(clipTri[1], ctx.windowHalf.x, ctx.windowHalf.y),
+                                                project(clipTri[2], ctx.windowHalf.x, ctx.windowHalf.y) };
+                    double depth = (-clipTri[0].z - clipTri[1].z - clipTri[2].z) / 3.0;
+                    faces.push_back({ depth, clipProj, shaded, isSel,
+                                      idx, static_cast<int>(fi), tri });
+                }
+            }
         }
 
         for (size_t ei = 0; ei < EDGE.size(); ++ei) {
