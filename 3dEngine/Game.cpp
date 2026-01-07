@@ -583,7 +583,7 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
     std::sort(drawOrder.begin(), drawOrder.end(),
         [](const auto& a, const auto& b) { return a.first > b.first; });
 
-    struct FaceDrawG { double d; std::array<P2, 4> p; ColorF col; bool selected; };
+    struct FaceDrawG { double d; std::array<P2, 3> p; ColorF col; bool selected; };
     struct EdgeDrawG { double d; P2 a, b; ColorF col; double th; bool selected; };
     std::vector<FaceDrawG> faces;
     std::vector<EdgeDrawG> edges;
@@ -629,11 +629,14 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
                 std::isinf(vp[f[2]].x) || std::isinf(vp[f[3]].x)) {
                 continue;
             }
-            double depth = (dot(v0 - cam, F) + dot(v1 - cam, F) +
-                            dot(v2 - cam, F) + dot(vw[f[3]] - cam, F)) / 4.0;
+            double depth0 = (dot(v0 - cam, F) + dot(v1 - cam, F) +
+                             dot(v2 - cam, F)) / 3.0;
+            double depth1 = (dot(v0 - cam, F) + dot(v2 - cam, F) +
+                             dot(v3 - cam, F)) / 3.0;
             bool isSel = (idx == sel);
             shaded = col * shade;
-            faces.push_back({ depth, { vp[f[0]], vp[f[1]], vp[f[2]], vp[f[3]] }, shaded, isSel });
+            faces.push_back({ depth0, { vp[f[0]], vp[f[1]], vp[f[2]] }, shaded, isSel });
+            faces.push_back({ depth1, { vp[f[0]], vp[f[2]], vp[f[3]] }, shaded, isSel });
         }
 
         for (auto [a, b] : EDGE) {
@@ -655,7 +658,7 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
         [](auto& a, auto& b) { return a.d < b.d; });
     for (const auto& fc : faces) {
         Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
-                 Vec2{fc.p[2].x,fc.p[2].y}, Vec2{fc.p[3].x,fc.p[3].y} }.draw(fc.col);
+                 Vec2{fc.p[2].x,fc.p[2].y} }.draw(fc.col);
     }
 
     std::stable_sort(edges.begin(), edges.end(),
