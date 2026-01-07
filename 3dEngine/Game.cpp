@@ -125,7 +125,7 @@ void Game::tryCreateCube(const FrameContext& ctx) {
     V3 hit = V3{ ctx.cam.x, yRand, ctx.cam.z } + dist * dir;
     GKey g{ gIdx(hit.x), gIdx(hit.z) };
     GKey place = findNearestEmpty(g);
-    if (!grid.contains(place)) {
+    if (grid.find(place) == grid.end()) {
         cubes.push_back({ { gPos(place.gx), yRand, gPos(place.gz) } });
         grid.insert(place);
     }
@@ -613,16 +613,16 @@ void Game::handleFPSMovement(double dt) {
 }
 
 GKey Game::findNearestEmpty(GKey start) {
-    if (!grid.contains(start)) return start;
+    if (grid.find(start) == grid.end()) return start;
     constexpr int MAX_RADIUS = 20;
     for (int r = 1; r <= MAX_RADIUS; ++r) {
         for (int dz = -r; dz <= r; ++dz) {
             int dx = r - std::abs(dz);
             GKey g1{ start.gx + dx, start.gz + dz };
-            if (!grid.contains(g1)) return g1;
+            if (grid.find(g1) == grid.end()) return g1;
             if (dx != 0) {
                 GKey g2{ start.gx - dx, start.gz + dz };
-                if (!grid.contains(g2)) return g2;
+                if (grid.find(g2) == grid.end()) return g2;
             }
         }
     }
