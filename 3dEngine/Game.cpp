@@ -575,16 +575,22 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
     const V3 pos = camera.pos;
 
     constexpr double DEPTH_EPS = 1e-4;
+    constexpr double DEP_TOL = 1e-6;
 
     std::vector<std::pair<double, int>> drawOrder(cubes.size());
     for (size_t i = 0; i < cubes.size(); ++i) {
         drawOrder[i] = { dot(cubes[i].c - cam, F), static_cast<int>(i) };
     }
-    std::sort(drawOrder.begin(), drawOrder.end(),
-        [](const auto& a, const auto& b) { return a.first > b.first; });
+    std::stable_sort(drawOrder.begin(), drawOrder.end(),
+        [&](const auto& a, const auto& b) {
+            if (std::abs(a.first - b.first) > DEP_TOL) {
+                return a.first > b.first;
+            }
+            return a.second < b.second;
+        });
 
-    struct FaceDrawG { double d; std::array<P2, 3> p; ColorF col; bool selected; };
-    struct EdgeDrawG { double d; P2 a, b; ColorF col; double th; bool selected; };
+    struct FaceDrawG { double d; std::array<P2, 3> p; ColorF col; bool selected; int cubeIdx; int faceIdx; int triIdx; };
+    struct EdgeDrawG { double d; P2 a, b; ColorF col; double th; bool selected; int cubeIdx; int edgeIdx; };
     std::vector<FaceDrawG> faces;
     std::vector<EdgeDrawG> edges;
 
@@ -604,7 +610,8 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
             vp[k] = scr(vw[k]);
         }
 
-        for (const auto& f : FACE) {
+        for (size_t fi = 0; fi < FACE.size(); ++fi) {
+            const auto& f = FACE[fi];
             V3 v0 = vw[f[0]];
             V3 v1 = vw[f[1]];
             V3 v2 = vw[f[2]];
@@ -635,11 +642,14 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
                              dot(v3 - cam, F)) / 3.0;
             bool isSel = (idx == sel);
             shaded = col * shade;
-            faces.push_back({ depth0, { vp[f[0]], vp[f[1]], vp[f[2]] }, shaded, isSel });
-            faces.push_back({ depth1, { vp[f[0]], vp[f[2]], vp[f[3]] }, shaded, isSel });
+            faces.push_back({ depth0, { vp[f[0]], vp[f[1]], vp[f[2]] }, shaded, isSel,
+                              idx, static_cast<int>(fi), 0 });
+            faces.push_back({ depth1, { vp[f[0]], vp[f[2]], vp[f[3]] }, shaded, isSel,
+                              idx, static_cast<int>(fi), 1 });
         }
 
-        for (auto [a, b] : EDGE) {
+        for (size_t ei = 0; ei < EDGE.size(); ++ei) {
+            auto [a, b] = EDGE[ei];
             if (std::isinf(vp[a].x) || std::isinf(vp[b].x)) {
                 continue;
             }
@@ -648,14 +658,23 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
             bool isSel = (idx == sel);
             if (isSel) depthEdge -= DEPTH_EPS;
 
-            edges.push_back({ depthEdge, vp[a], vp[b], col, th, isSel });
+            edges.push_back({ depthEdge, vp[a], vp[b], col, th, isSel, idx, static_cast<int>(ei) });
         }
     }
 
-    constexpr double DEP_TOL = 1e-6;
-
     std::sort(faces.begin(), faces.end(),
-        [](auto& a, auto& b) { return a.d < b.d; });
+        [&](const FaceDrawG& a, const FaceDrawG& b) {
+            if (std::abs(a.d - b.d) > DEP_TOL) {
+                return a.d < b.d;
+            }
+            if (a.cubeIdx != b.cubeIdx) {
+                return a.cubeIdx < b.cubeIdx;
+            }
+            if (a.faceIdx != b.faceIdx) {
+                return a.faceIdx < b.faceIdx;
+            }
+            return a.triIdx < b.triIdx;
+        });
     for (const auto& fc : faces) {
         Polygon{ Vec2{fc.p[0].x,fc.p[0].y}, Vec2{fc.p[1].x,fc.p[1].y},
                  Vec2{fc.p[2].x,fc.p[2].y} }.draw(fc.col);
@@ -666,7 +685,13 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
             if (std::abs(a.d - b.d) > DEP_TOL) {
                 return a.d > b.d;
             }
-            return !a.selected && b.selected;
+            if (a.selected != b.selected) {
+                return !a.selected && b.selected;
+            }
+            if (a.cubeIdx != b.cubeIdx) {
+                return a.cubeIdx < b.cubeIdx;
+            }
+            return a.edgeIdx < b.edgeIdx;
         });
 
     for (size_t i = 0; i < lights.size(); ++i) {
