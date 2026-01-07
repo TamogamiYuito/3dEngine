@@ -97,27 +97,29 @@ float ReduceLightBleeding(float p_max, float amount)
 	return LineStep(amount, 1.0, p_max);
 }
 
-float CalculateShadow(vec3 worldPosition)
+float CalculateShadow(vec3 worldPosition, vec3 normal)
 {
-	vec4 projectedPosition = (vec4(worldPosition, 1.0) * g_worldToProjectedShadow);
+        float bias = max(0.05 * (1.0 - dot(normal, g_sunDirection)), 0.005);
+        vec3 position = (worldPosition + (normal * bias));
+        vec4 projectedPosition = (vec4(position, 1.0) * g_worldToProjectedShadow);
 
 	if (any(notEqual(clamp(projectedPosition.xyz, 0.0, 1.0), projectedPosition.xyz)))
 	{
 		return 1.0;
 	}
 	
-	vec2 uv = vec2(projectedPosition.x, (1.0 - projectedPosition.y));
-	float depth = (length(g_sunPosition - worldPosition) - 0.03125);
-	vec2 moments = texture(Texture1, uv).rg;
+        vec2 uv = vec2(projectedPosition.x, (1.0 - projectedPosition.y));
+        float depth = length(g_sunPosition - position);
+        vec2 moments = texture(Texture1, uv).rg;
 
 	if (depth <= moments.x)
 	{
 		return 1.0;
 	}
 
-	float variance = (moments.y - (moments.x * moments.x));
-	float d = (moments.x - depth);
-	float lit = (variance / (variance + (d * d)));
+        float variance = (moments.y - (moments.x * moments.x));
+        float d = (moments.x - depth);
+        float lit = (variance / (variance + (d * d)));
 
 	return ReduceLightBleeding(lit, g_lightBleedingReduction);
 }
@@ -125,12 +127,11 @@ float CalculateShadow(vec3 worldPosition)
 void main()
 {
 	// Shadow
-	float lit = CalculateShadow(WorldPosition);
+	vec3 n = normalize(Normal);
+	float lit = CalculateShadow(WorldPosition, n);
 
 	vec3 lightColor		= (g_sunColor * lit);
 	vec3 lightDirection	= g_sunDirection;
-
-	vec3 n = normalize(Normal);
 	vec3 l = lightDirection;
 	vec4 diffuseColor = GetDiffuseColor(UV);
 	vec3 ambientColor = (g_ambientColor * g_globalAmbientColor);
