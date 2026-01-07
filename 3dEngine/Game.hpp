@@ -1,8 +1,7 @@
-﻿#pragma once
+#pragma once
 #include "Camera.hpp"
 #include "Cube.hpp"
 #include "Gizmo.hpp"
-#include "Light.hpp"
 #include <vector>
 #include <unordered_set>
 
@@ -15,7 +14,6 @@ private:
     std::vector<Cube> cubes;
     std::unordered_set<GKey, GHash> grid;
     Camera camera;
-	Light  light;
     Mode   mode = Mode::Move;
     int    sel = -1;
     int    hoverIdx = -1;
