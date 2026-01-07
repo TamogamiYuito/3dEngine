@@ -633,7 +633,7 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
     auto scr = [&](V3 w) { return ctx.project(w); };
     const V3 cam = ctx.cam;
     const V3 F = ctx.forward;
-    const V3 R = ctx.right;
+    const V3 right = ctx.right;
     const V3 U = ctx.up;
     const V3 pos = camera.pos;
 
@@ -672,7 +672,7 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
             V3 p = LOCAL[k] * cb.s;
             vw[k] = cb.c + qRotate(cb.q, p);
             V3 r = vw[k] - cam;
-            vv[k] = { dot(r, R), dot(r, U), -dot(r, F) };
+            vv[k] = { dot(r, right), dot(r, U), -dot(r, F) };
             vp[k] = project(vv[k], ctx.windowHalf.x, ctx.windowHalf.y);
         }
 
