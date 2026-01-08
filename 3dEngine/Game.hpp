@@ -32,11 +32,17 @@ private:
     int    lightSel = -1;
     Mode   mode = Mode::Move;
     int    sel = -1;
+    std::unordered_set<int> selectedCubes;
     int    hoverIdx = -1;
     int    hoverLightIdx = -1;
     Handle hoverHd = Handle::None;
     Handle activeHd = Handle::None;
     Drag   drag;
+    struct SelectionBox {
+        bool on = false;
+        s3d::Vec2 start{ 0,0 };
+        s3d::Vec2 current{ 0,0 };
+    } selectionBox;
 
     FrameContext buildFrameContext(const s3d::Vec2& windowHalf) const;
     void updateModeState(bool free);
@@ -47,6 +53,9 @@ private:
     void cycleLightSelection();
     void adjustSelectedLightIntensity(double dt);
     void updateHoverState(const FrameContext& ctx, bool free);
+    void updateSelectionBox(const FrameContext& ctx, bool free);
+    void applySelectionBox(const FrameContext& ctx);
+    void updateSelectionAfterErase(int removedIdx);
     void handleSelectionAndDragStart(const FrameContext& ctx, bool free);
     void handleDragEnd();
     void updateDrag(const FrameContext& ctx);

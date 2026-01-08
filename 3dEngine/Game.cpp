@@ -163,7 +163,7 @@ void Game::tryDeleteSelectedCube() {
     const Cube& cb = cubes[sel];
     grid.erase({ gIdx(cb.c.x), gIdx(cb.c.z) });
     cubes.erase(cubes.begin() + sel);
-    sel = -1;
+    updateSelectionAfterErase(sel);
     hoverIdx = -1;
 }
 
@@ -336,8 +336,15 @@ void Game::handleSelectionAndDragStart(const FrameContext& ctx, bool free) {
             const double dl = (hoverLightIdx != -1) ? len(lights[hoverLightIdx].c - ctx.cam) : 1e9;
             const bool pickLight = (dl < dc);
 
-            if (pickLight) { lightSel = hoverLightIdx; sel = -1; }
-            else { sel = hoverIdx; lightSel = -1; }
+            if (pickLight) {
+                lightSel = hoverLightIdx;
+                sel = -1;
+                selectedCubes.clear();
+            } else {
+                sel = hoverIdx;
+                lightSel = -1;
+                selectedCubes = { sel };
+            }
         }
     }
 }
@@ -422,9 +429,87 @@ void Game::processInput(const FrameContext& ctx, double dt, bool free) {
     updateModeState(free);
     handleCreationUI(ctx, dt, free);
     updateHoverState(ctx, free);
+    updateSelectionBox(ctx, free);
     handleSelectionAndDragStart(ctx, free);
     handleDragEnd();
     updateDrag(ctx);
+}
+
+void Game::updateSelectionBox(const FrameContext& ctx, bool free) {
+    if (!free || drag.on || activeHd != Handle::None) {
+        return;
+    }
+
+    if (MouseL.down()) {
+        if (hoverHd == Handle::None && hoverIdx == -1 && hoverLightIdx == -1) {
+            selectionBox.on = true;
+            selectionBox.start = ctx.cursor;
+            selectionBox.current = ctx.cursor;
+        } else {
+            selectionBox.on = false;
+        }
+    }
+
+    if (selectionBox.on && MouseL.pressed()) {
+        selectionBox.current = ctx.cursor;
+    }
+
+    if (selectionBox.on && MouseL.up()) {
+        applySelectionBox(ctx);
+        selectionBox.on = false;
+    }
+}
+
+void Game::applySelectionBox(const FrameContext& ctx) {
+    Vec2 minPos{ std::min(selectionBox.start.x, selectionBox.current.x),
+                 std::min(selectionBox.start.y, selectionBox.current.y) };
+    Vec2 size{ std::abs(selectionBox.start.x - selectionBox.current.x),
+               std::abs(selectionBox.start.y - selectionBox.current.y) };
+
+    constexpr double MIN_BOX = 4.0;
+    if (size.x < MIN_BOX && size.y < MIN_BOX) {
+        return;
+    }
+
+    RectF box{ minPos, size };
+    std::unordered_set<int> nextSelection;
+    for (size_t i = 0; i < cubes.size(); ++i) {
+        P2 proj = ctx.project(cubes[i].c);
+        if (std::isinf(proj.x) || std::isinf(proj.y)) {
+            continue;
+        }
+        if (box.contains(Vec2{ proj.x, proj.y })) {
+            nextSelection.insert(static_cast<int>(i));
+        }
+    }
+
+    selectedCubes = std::move(nextSelection);
+    if (!selectedCubes.empty()) {
+        sel = *std::min_element(selectedCubes.begin(), selectedCubes.end());
+        lightSel = -1;
+    } else {
+        sel = -1;
+    }
+}
+
+void Game::updateSelectionAfterErase(int removedIdx) {
+    std::unordered_set<int> nextSelection;
+    for (int idx : selectedCubes) {
+        if (idx == removedIdx) {
+            continue;
+        }
+        if (idx > removedIdx) {
+            nextSelection.insert(idx - 1);
+        } else {
+            nextSelection.insert(idx);
+        }
+    }
+    selectedCubes = std::move(nextSelection);
+    if (sel == removedIdx) {
+        sel = selectedCubes.empty() ? -1 : *std::min_element(selectedCubes.begin(), selectedCubes.end());
+    } else if (sel > removedIdx) {
+        sel -= 1;
+    }
 }
 
 void Game::updateSimulation(double dt, bool free) {
@@ -677,10 +762,11 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
     for (auto [_, idx] : drawOrder) {
         const Cube& cb = cubes[idx];
 
+        bool isSelected = (selectedCubes.count(idx) > 0);
         ColorF col = ColorF{ 1.0, 0.8, 0.3 };
         if (free && idx == hoverIdx) col = ColorF(Palette::Yellow);
-        if (idx == sel)              col = ColorF(Palette::Red);
-        double th = (idx == sel) ? 3 : 1;
+        if (isSelected)              col = ColorF(Palette::Red);
+        double th = isSelected ? 3 : 1;
 
         std::array<V3, 8> vw;
         std::array<V3, 8> vv;
@@ -713,7 +799,7 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
             shade = Clamp(shade, 0.0, 2.0);
             ColorF shaded = col * shade;
 
-            bool isSel = (idx == sel);
+            bool isSel = isSelected;
             shaded = col * shade;
             const std::array<std::array<int, 3>, 2> triIdx{ {
                 { f[0], f[1], f[2] },
@@ -740,7 +826,7 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
             }
 
             double depthEdge = (dot(vw[a] - cam, F) + dot(vw[b] - cam, F)) * 0.5;
-            bool isSel = (idx == sel);
+            bool isSel = isSelected;
             if (isSel) depthEdge -= DEPTH_EPS;
 
             edges.push_back({ depthEdge, vp[a], vp[b], col, th, isSel, idx, static_cast<int>(ei) });
@@ -965,6 +1051,17 @@ void Game::drawFrame(const FrameContext& ctx, bool free) {
                     }
                 }
             }
+        }
+    }
+
+    if (free && selectionBox.on) {
+        Vec2 minPos{ std::min(selectionBox.start.x, selectionBox.current.x),
+                     std::min(selectionBox.start.y, selectionBox.current.y) };
+        Vec2 size{ std::abs(selectionBox.start.x - selectionBox.current.x),
+                   std::abs(selectionBox.start.y - selectionBox.current.y) };
+        if (size.x > 1.0 || size.y > 1.0) {
+            RectF{ minPos, size }.drawFrame(2.0, ColorF(Palette::Skyblue, 0.8));
+            RectF{ minPos, size }.draw(ColorF(Palette::Skyblue, 0.15));
         }
     }
 
