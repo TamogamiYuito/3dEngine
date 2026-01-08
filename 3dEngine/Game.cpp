@@ -107,6 +107,7 @@ void Game::handleCreationUI(const FrameContext& ctx, double dt, bool free) {
 
     tryCreateCube(ctx);
     tryCreateLight(ctx);
+    tryDeleteSelectedCube();
     cycleLightSelection();
     adjustSelectedLightIntensity(dt);
 }
@@ -150,6 +151,22 @@ void Game::tryCreateLight(const FrameContext& ctx) {
     lightSel = static_cast<int>(lights.size()) - 1;
 }
 
+void Game::tryDeleteSelectedCube() {
+    if (sel == -1 || drag.on) {
+        return;
+    }
+
+    if (!SimpleGUI::Button(U"Delete Cube", { 20,80 })) {
+        return;
+    }
+
+    const Cube& cb = cubes[sel];
+    grid.erase({ gIdx(cb.c.x), gIdx(cb.c.z) });
+    cubes.erase(cubes.begin() + sel);
+    sel = -1;
+    hoverIdx = -1;
+}
+
 void Game::cycleLightSelection() {
     if (KeyTab.down() && !lights.empty()) {
         lightSel = (lightSel + 1) % static_cast<int>(lights.size());
@@ -165,7 +182,7 @@ void Game::adjustSelectedLightIntensity(double dt) {
         lights[lightSel].intensity = std::max(0.0, lights[lightSel].intensity - dt);
     if (KeyX.pressed())
         lights[lightSel].intensity += dt;
-    SimpleGUI::Slider(U"Intensity", lights[lightSel].intensity, 0.0, 5.0, Vec2{ 20,80 });
+    SimpleGUI::Slider(U"Intensity", lights[lightSel].intensity, 0.0, 5.0, Vec2{ 20,110 });
 }
 
 void Game::updateHoverState(const FrameContext& ctx, bool free) {

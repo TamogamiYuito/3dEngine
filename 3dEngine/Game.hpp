@@ -43,6 +43,7 @@ private:
     void handleCreationUI(const FrameContext& ctx, double dt, bool free);
     void tryCreateCube(const FrameContext& ctx);
     void tryCreateLight(const FrameContext& ctx);
+    void tryDeleteSelectedCube();
     void cycleLightSelection();
     void adjustSelectedLightIntensity(double dt);
     void updateHoverState(const FrameContext& ctx, bool free);
