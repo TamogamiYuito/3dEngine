@@ -55,7 +55,7 @@ void GameInputHandler::handleAiPromptUI(GameState& state, const FrameContext& ct
         state.aiPromptState.active = false;
     }
 
-    TextInput::UpdateText(state.aiPromptState, state.aiPrompt);
+    TextInput::UpdateText(state.aiPrompt, state.aiPromptState);
 
     ColorF border = state.aiPromptState.active ? ColorF{ 0.3, 0.7, 1.0 } : ColorF{ 0.4, 0.4, 0.4 };
     inputBox.draw(ColorF{ 0.1, 0.1, 0.12, 0.9 });
