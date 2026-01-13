@@ -296,8 +296,31 @@ void Game::handleSelectionAndDragStart(const FrameContext& ctx, bool free) {
             drag.p0 = cb.c;
             drag.q0 = cb.q;
             drag.s0 = cb.s;
+            dragCubeIndices.clear();
+            dragCubePositions.clear();
+            dragCubeRotations.clear();
+            dragCubeScales.clear();
+            if (selectedCubes.empty()) {
+                dragCubeIndices.push_back(sel);
+                dragCubePositions.push_back(cb.c);
+                dragCubeRotations.push_back(cb.q);
+                dragCubeScales.push_back(cb.s);
+            } else {
+                dragCubeIndices.reserve(selectedCubes.size());
+                dragCubePositions.reserve(selectedCubes.size());
+                dragCubeRotations.reserve(selectedCubes.size());
+                dragCubeScales.reserve(selectedCubes.size());
+                for (int idx : selectedCubes) {
+                    const Cube& selected = cubes[idx];
+                    dragCubeIndices.push_back(idx);
+                    dragCubePositions.push_back(selected.c);
+                    dragCubeRotations.push_back(selected.q);
+                    dragCubeScales.push_back(selected.s);
+                }
+            }
             if (activeHd == Handle::MoveX || activeHd == Handle::MoveZ)
-                grid.erase({ gIdx(cb.c.x), gIdx(cb.c.z) });
+                for (const V3& pos : dragCubePositions)
+                    grid.erase({ gIdx(pos.x), gIdx(pos.z) });
         }
         else if (lightSel != -1) {
             Light& lt = lights[lightSel];
@@ -352,10 +375,16 @@ void Game::handleSelectionAndDragStart(const FrameContext& ctx, bool free) {
 void Game::handleDragEnd() {
     if (MouseL.up()) {
         if (drag.on && sel != -1 && (activeHd == Handle::MoveX || activeHd == Handle::MoveZ)) {
-            Cube& cb = cubes[sel];
-            grid.insert({ gIdx(cb.c.x), gIdx(cb.c.z) });
+            for (int idx : dragCubeIndices) {
+                Cube& cb = cubes[idx];
+                grid.insert({ gIdx(cb.c.x), gIdx(cb.c.z) });
+            }
         }
         drag.on = false; activeHd = Handle::None;
+        dragCubeIndices.clear();
+        dragCubePositions.clear();
+        dragCubeRotations.clear();
+        dragCubeScales.clear();
     }
 }
 
@@ -384,7 +413,14 @@ void Game::updateDrag(const FrameContext& ctx) {
         Vec2 dir = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).normalized();
         double pix = Dot(d, dir);
         double world = (pix / drag.lenPx) * 40.0;
-        objPos = drag.p0 + ax * world;
+        V3 delta = ax * world;
+        if (isCube) {
+            for (size_t i = 0; i < dragCubeIndices.size(); ++i) {
+                cubes[dragCubeIndices[i]].c = dragCubePositions[i] + delta;
+            }
+        } else {
+            objPos = drag.p0 + delta;
+        }
     }
 
     /* Rotate */
@@ -394,7 +430,13 @@ void Game::updateDrag(const FrameContext& ctx) {
             if (delta > s3d::Math::Pi)      delta -= s3d::Math::TwoPi;
             if (delta < -s3d::Math::Pi)     delta += s3d::Math::TwoPi;
             Quat dq = qAxisAngle(drag.axis, delta);
-            objRot = qNormalize(qMul(dq, drag.q0));
+            if (isCube) {
+                for (size_t i = 0; i < dragCubeIndices.size(); ++i) {
+                    cubes[dragCubeIndices[i]].q = qNormalize(qMul(dq, dragCubeRotations[i]));
+                }
+            } else {
+                objRot = qNormalize(qMul(dq, drag.q0));
+            }
         }
     }
 
@@ -408,20 +450,41 @@ void Game::updateDrag(const FrameContext& ctx) {
         Vec2 dir = (Vec2{ p1.x,p1.y } - Vec2{ p0.x,p0.y }).normalized();
         double pix = Dot(d, dir);
         double f = 1.0 + pix * 0.002;
-        V3 s = drag.s0;
-        if (activeHd == Handle::ScaleX) s.x = Clamp(s.x * f, 0.1, 5.0);
-        else if (activeHd == Handle::ScaleY) s.y = Clamp(s.y * f, 0.1, 5.0);
-        else s.z = Clamp(s.z * f, 0.1, 5.0);
-        objScl = s;
+        if (isCube) {
+            for (size_t i = 0; i < dragCubeIndices.size(); ++i) {
+                V3 s = dragCubeScales[i];
+                if (activeHd == Handle::ScaleX) s.x = Clamp(s.x * f, 0.1, 5.0);
+                else if (activeHd == Handle::ScaleY) s.y = Clamp(s.y * f, 0.1, 5.0);
+                else s.z = Clamp(s.z * f, 0.1, 5.0);
+                cubes[dragCubeIndices[i]].s = s;
+            }
+        } else {
+            V3 s = drag.s0;
+            if (activeHd == Handle::ScaleX) s.x = Clamp(s.x * f, 0.1, 5.0);
+            else if (activeHd == Handle::ScaleY) s.y = Clamp(s.y * f, 0.1, 5.0);
+            else s.z = Clamp(s.z * f, 0.1, 5.0);
+            objScl = s;
+        }
     }
 
     /* Uniform Scale */
     else {
-        V3 f = drag.s0 * (1.0 + d.x * 0.002);
-        f.x = Clamp(f.x, 0.1, 5.0);
-        f.y = Clamp(f.y, 0.1, 5.0);
-        f.z = Clamp(f.z, 0.1, 5.0);
-        objScl = f;
+        double scaleFactor = 1.0 + d.x * 0.002;
+        if (isCube) {
+            for (size_t i = 0; i < dragCubeIndices.size(); ++i) {
+                V3 f = dragCubeScales[i] * scaleFactor;
+                f.x = Clamp(f.x, 0.1, 5.0);
+                f.y = Clamp(f.y, 0.1, 5.0);
+                f.z = Clamp(f.z, 0.1, 5.0);
+                cubes[dragCubeIndices[i]].s = f;
+            }
+        } else {
+            V3 f = drag.s0 * scaleFactor;
+            f.x = Clamp(f.x, 0.1, 5.0);
+            f.y = Clamp(f.y, 0.1, 5.0);
+            f.z = Clamp(f.z, 0.1, 5.0);
+            objScl = f;
+        }
     }
 }
 

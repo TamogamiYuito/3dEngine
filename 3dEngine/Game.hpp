@@ -33,6 +33,10 @@ private:
     Mode   mode = Mode::Move;
     int    sel = -1;
     std::unordered_set<int> selectedCubes;
+    std::vector<int> dragCubeIndices;
+    std::vector<V3> dragCubePositions;
+    std::vector<Quat> dragCubeRotations;
+    std::vector<V3> dragCubeScales;
     int    hoverIdx = -1;
     int    hoverLightIdx = -1;
     Handle hoverHd = Handle::None;
