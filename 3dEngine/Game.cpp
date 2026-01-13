@@ -156,7 +156,7 @@ void Game::tryDeleteSelectedCube() {
         return;
     }
 
-    if (!SimpleGUI::Button(U"Delete Cube", { 20,80 })) {
+	if (!KeyDelete.down()) {
         return;
     }
 
