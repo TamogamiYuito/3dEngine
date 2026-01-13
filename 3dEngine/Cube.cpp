@@ -1,5 +1,6 @@
 #include "Cube.hpp"
 #include "RenderUtils.hpp"
+#include <algorithm>
 #include <cmath>
 
 int gIdx(double v) { return (int)std::round(v / (2 * HALF)); }

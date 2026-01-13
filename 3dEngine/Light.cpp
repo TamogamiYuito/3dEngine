@@ -1,5 +1,6 @@
 #include "Light.hpp"
 #include "RenderUtils.hpp"
+#include <algorithm>
 #include <cmath>
 
 bool Light::checkHovered(const s3d::Vec2& cur, double cx, double cy,
