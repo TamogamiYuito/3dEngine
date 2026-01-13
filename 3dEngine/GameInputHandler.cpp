@@ -1,14 +1,29 @@
 ﻿#include "GameInputHandler.hpp"
 #include "RenderUtils.hpp"
+#include "AiClient.hpp"
 #include <Siv3D.hpp>
 #include <algorithm>
+#include <chrono>
+#include <cstdlib>
+#include <future>
 
 using namespace s3d;
+
+namespace {
+std::string GetApiKey() {
+    const char* key = std::getenv("OPENAI_API_KEY");
+    if (!key) {
+        return {};
+    }
+    return key;
+}
+} // namespace
 
 void GameInputHandler::processInput(GameState& state, const FrameContext& ctx, double dt, bool free) {
     updateModeState(state, free);
     handleCreationUI(state, ctx, dt, free);
     handleAiPromptUI(state, ctx);
+    updateAiRequest(state, ctx);
     updateHoverState(state, ctx, free);
     updateSelectionBox(state, ctx, free);
     handleSelectionAndDragStart(state, ctx, free);
@@ -66,10 +81,19 @@ void GameInputHandler::handleAiPromptUI(GameState& state, const FrameContext& ct
     if (state.aiPromptState.active && KeyEnter.down()) {
         submit = true;
     }
-    if (submit && !state.aiPrompt.isEmpty()) {
-        applyAiPrompt(state, ctx, state.aiPrompt);
+    if (submit && !state.aiPrompt.isEmpty() && !state.aiRequestInFlight) {
+        state.aiRequestInFlight = true;
+        state.aiStatus = U"AIに問い合わせ中...";
+        state.aiResponse.clear();
+        state.aiFuture = std::async(std::launch::async, [prompt = state.aiPrompt, apiKey = GetApiKey()]() {
+            return RequestAiResponse(prompt, apiKey);
+        });
         state.aiPrompt.clear();
         state.aiPromptState = TextEditState{};
+    }
+
+    if (state.aiRequestInFlight && !state.aiStatus.isEmpty()) {
+        font(state.aiStatus).draw(panelPos + Vec2{ 12, 100 }, Palette::Orange);
     }
 
     if (!state.aiResponse.isEmpty()) {
@@ -77,56 +101,62 @@ void GameInputHandler::handleAiPromptUI(GameState& state, const FrameContext& ct
     }
 }
 
-void GameInputHandler::applyAiPrompt(GameState& state, const FrameContext& ctx, const String& prompt) {
-    auto has = [&](const String& key) { return prompt.includes(key); };
-
-    if (has(U"背景") || has(U"background") || has(U"Background") || has(U"BACKGROUND")) {
-        if (has(U"青") || has(U"blue") || has(U"Blue") || has(U"BLUE")) {
-            state.backgroundColor = ColorF{ 0.05, 0.12, 0.25 };
-            state.aiResponse = U"背景色を青に変更しました。";
-            return;
-        }
-        if (has(U"赤") || has(U"red") || has(U"Red") || has(U"RED")) {
-            state.backgroundColor = ColorF{ 0.25, 0.08, 0.08 };
-            state.aiResponse = U"背景色を赤に変更しました。";
-            return;
-        }
-        if (has(U"緑") || has(U"green") || has(U"Green") || has(U"GREEN")) {
-            state.backgroundColor = ColorF{ 0.08, 0.2, 0.12 };
-            state.aiResponse = U"背景色を緑に変更しました。";
-            return;
-        }
-        if (has(U"白") || has(U"white") || has(U"White") || has(U"WHITE")) {
-            state.backgroundColor = ColorF{ 0.9, 0.9, 0.9 };
-            state.aiResponse = U"背景色を白に変更しました。";
-            return;
-        }
-        if (has(U"黒") || has(U"black") || has(U"Black") || has(U"BLACK")) {
-            state.backgroundColor = ColorF{ 0.0, 0.0, 0.0 };
-            state.aiResponse = U"背景色を黒に変更しました。";
-            return;
-        }
+void GameInputHandler::updateAiRequest(GameState& state, const FrameContext& ctx) {
+    if (!state.aiRequestInFlight || !state.aiFuture.has_value()) {
+        return;
     }
 
-    if (has(U"cube") || has(U"Cube") || has(U"CUBE") || has(U"キューブ") || has(U"立方体")) {
+    if (state.aiFuture->wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+        return;
+    }
+
+    AiResponse response = state.aiFuture->get();
+    state.aiFuture.reset();
+    state.aiRequestInFlight = false;
+    state.aiStatus.clear();
+
+    if (!response.ok) {
+        state.aiResponse = response.error.isEmpty() ? U"AI応答に失敗しました。" : response.error;
+        return;
+    }
+
+    applyAiCommand(state, ctx, response.command);
+    state.aiResponse = response.reply.isEmpty() ? U"AIの指示を実行しました。" : response.reply;
+}
+
+void GameInputHandler::applyAiCommand(GameState& state, const FrameContext& ctx, const String& command) {
+    if (command == U"background_blue") {
+        state.backgroundColor = ColorF{ 0.05, 0.12, 0.25 };
+        return;
+    }
+    if (command == U"background_red") {
+        state.backgroundColor = ColorF{ 0.25, 0.08, 0.08 };
+        return;
+    }
+    if (command == U"background_green") {
+        state.backgroundColor = ColorF{ 0.08, 0.2, 0.12 };
+        return;
+    }
+    if (command == U"background_white") {
+        state.backgroundColor = ColorF{ 0.9, 0.9, 0.9 };
+        return;
+    }
+    if (command == U"background_black") {
+        state.backgroundColor = ColorF{ 0.0, 0.0, 0.0 };
+        return;
+    }
+    if (command == U"add_cube") {
         spawnCubeNearCamera(state, ctx);
-        state.aiResponse = U"キューブを追加しました。";
         return;
     }
-
-    if (has(U"light") || has(U"Light") || has(U"LIGHT") || has(U"ライト")) {
+    if (command == U"add_light") {
         spawnLightNearCamera(state, ctx);
-        state.aiResponse = U"ライトを追加しました。";
         return;
     }
-
-    if (has(U"カメラ") && (has(U"リセット") || has(U"reset") || has(U"Reset") || has(U"RESET"))) {
+    if (command == U"reset_camera") {
         state.camera = Camera{};
-        state.aiResponse = U"カメラを初期位置に戻しました。";
         return;
     }
-
-    state.aiResponse = U"対応コマンド: 背景(青/赤/緑/白/黒), キューブ追加, ライト追加, カメラリセット";
 }
 
 void GameInputHandler::spawnCubeNearCamera(GameState& state, const FrameContext& ctx) {

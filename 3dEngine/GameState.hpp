@@ -3,7 +3,9 @@
 #include "Cube.hpp"
 #include "Gizmo.hpp"
 #include "Light.hpp"
+#include "AiClient.hpp"
 #include <optional>
+#include <future>
 #include <unordered_set>
 #include <vector>
 
@@ -47,6 +49,9 @@ struct GameState {
     s3d::String aiPrompt;
     s3d::TextEditState aiPromptState;
     s3d::String aiResponse;
+    s3d::String aiStatus;
+    bool aiRequestInFlight = false;
+    std::optional<std::future<AiResponse>> aiFuture;
     s3d::ColorF backgroundColor{ 0, 0, 0 };
 };
 

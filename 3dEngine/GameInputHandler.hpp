@@ -9,7 +9,8 @@ private:
     void updateModeState(GameState& state, bool free);
     void handleCreationUI(GameState& state, const FrameContext& ctx, double dt, bool free);
     void handleAiPromptUI(GameState& state, const FrameContext& ctx);
-    void applyAiPrompt(GameState& state, const FrameContext& ctx, const s3d::String& prompt);
+    void updateAiRequest(GameState& state, const FrameContext& ctx);
+    void applyAiCommand(GameState& state, const FrameContext& ctx, const s3d::String& command);
     void spawnCubeNearCamera(GameState& state, const FrameContext& ctx);
     void spawnLightNearCamera(GameState& state, const FrameContext& ctx);
     void tryCreateCube(GameState& state, const FrameContext& ctx);
