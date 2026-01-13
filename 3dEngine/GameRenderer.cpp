@@ -171,7 +171,7 @@ void GameRenderer::drawFrame(const GameState& state, const FrameContext& ctx, bo
     std::sort(faces.begin(), faces.end(),
         [&](const FaceDrawG& a, const FaceDrawG& b) {
             if (std::abs(a.d - b.d) > DEP_TOL) {
-                return a.d < b.d;
+                return a.d > b.d;
             }
             if (a.cubeIdx != b.cubeIdx) {
                 return a.cubeIdx < b.cubeIdx;
