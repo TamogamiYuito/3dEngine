@@ -160,10 +160,23 @@ void Game::tryDeleteSelectedCube() {
         return;
     }
 
-    const Cube& cb = cubes[sel];
-    grid.erase({ gIdx(cb.c.x), gIdx(cb.c.z) });
-    cubes.erase(cubes.begin() + sel);
-    updateSelectionAfterErase(sel);
+    std::vector<int> deleteIndices;
+    if (selectedCubes.empty()) {
+        deleteIndices.push_back(sel);
+    } else {
+        deleteIndices.reserve(selectedCubes.size());
+        for (int idx : selectedCubes) {
+            deleteIndices.push_back(idx);
+        }
+    }
+
+    std::sort(deleteIndices.begin(), deleteIndices.end(), std::greater<int>());
+    for (int idx : deleteIndices) {
+        const Cube& cb = cubes[idx];
+        grid.erase({ gIdx(cb.c.x), gIdx(cb.c.z) });
+        cubes.erase(cubes.begin() + idx);
+        updateSelectionAfterErase(idx);
+    }
     hoverIdx = -1;
 }
 
