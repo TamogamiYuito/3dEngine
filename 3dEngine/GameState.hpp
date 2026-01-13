@@ -44,6 +44,10 @@ struct GameState {
     Handle activeHd = Handle::None;
     Drag drag;
     SelectionBox selectionBox;
+    s3d::String aiPrompt;
+    s3d::TextEditState aiPromptState;
+    s3d::String aiResponse;
+    s3d::ColorF backgroundColor{ 0, 0, 0 };
 };
 
 FrameContext buildFrameContext(const GameState& state, const s3d::Vec2& windowHalf);
