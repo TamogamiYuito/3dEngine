@@ -6,10 +6,10 @@
 using namespace s3d;
 
 namespace {
-    constexpr double kNearPlane = NEAR_Z - CAM_DIST;
+    constexpr double kNearPlane = -NEAR_Z;
 
     bool isInsideNearPlane(const V3& v) {
-        return v.z >= kNearPlane;
+        return v.z <= kNearPlane;
     }
 
     V3 intersectNearPlane(const V3& a, const V3& b) {
