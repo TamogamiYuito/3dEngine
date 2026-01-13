@@ -132,10 +132,8 @@ void GameRenderer::drawFrame(const GameState& state, const FrameContext& ctx, bo
             }
 
             shade = Clamp(shade, 0.0, 2.0);
-            ColorF shaded = col * shade;
-
+            ColorF shaded{ col.r * shade, col.g * shade, col.b * shade, col.a };
             bool isSel = isSelected;
-            shaded = col * shade;
             const std::array<std::array<int, 3>, 2> triIdx{ {
                 { f[0], f[1], f[2] },
                 { f[0], f[2], f[3] }
