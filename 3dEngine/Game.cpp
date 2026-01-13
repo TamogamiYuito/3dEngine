@@ -12,11 +12,11 @@ Game::Game() {
     }
 }
 void Game::run() {
-    Scene::SetBackground(ColorF{ 0,0,0 });
     const Vec2 WINF{ Scene::Width() * 0.5, Scene::Height() * 0.5 };
     const Point WINP{ (int32)WINF.x, (int32)WINF.y };
 
     while (System::Update()) {
+        Scene::SetBackground(state.backgroundColor);
         const double dt = Scene::DeltaTime();
         state.camera.update(dt, WINF, WINP);
 

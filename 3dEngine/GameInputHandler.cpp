@@ -8,6 +8,7 @@ using namespace s3d;
 void GameInputHandler::processInput(GameState& state, const FrameContext& ctx, double dt, bool free) {
     updateModeState(state, free);
     handleCreationUI(state, ctx, dt, free);
+    handleAiPromptUI(state, ctx);
     updateHoverState(state, ctx, free);
     updateSelectionBox(state, ctx, free);
     handleSelectionAndDragStart(state, ctx, free);
@@ -33,6 +34,130 @@ void GameInputHandler::handleCreationUI(GameState& state, const FrameContext& ct
     tryDeleteSelectedCube(state);
     cycleLightSelection(state);
     adjustSelectedLightIntensity(state, dt);
+}
+
+void GameInputHandler::handleAiPromptUI(GameState& state, const FrameContext& ctx) {
+    constexpr Vec2 panelPos{ 20, 150 };
+    constexpr Vec2 panelSize{ 360, 130 };
+    const RectF panel{ panelPos, panelSize };
+
+    panel.draw(ColorF{ 0.05, 0.05, 0.08, 0.75 });
+    panel.drawFrame(1.0, ColorF{ 0.3, 0.6, 0.9, 0.8 });
+
+    static const Font font{ 14 };
+    font(U"AI 検索ボックス").draw(panelPos + Vec2{ 12, 8 }, Palette::White);
+
+    RectF inputBox{ panelPos.x + 12, panelPos.y + 32, panelSize.x - 24, 28 };
+    if (inputBox.leftClicked()) {
+        state.aiPromptState.active = true;
+    }
+    if (MouseL.down() && !inputBox.mouseOver()) {
+        state.aiPromptState.active = false;
+    }
+
+    TextInput::Update(state.aiPrompt, state.aiPromptState);
+
+    ColorF border = state.aiPromptState.active ? ColorF{ 0.3, 0.7, 1.0 } : ColorF{ 0.4, 0.4, 0.4 };
+    inputBox.draw(ColorF{ 0.1, 0.1, 0.12, 0.9 });
+    inputBox.drawFrame(1.0, border);
+    font(state.aiPrompt).draw(inputBox.pos + Vec2{ 6, 4 }, Palette::White);
+
+    bool submit = SimpleGUI::Button(U"実行", Vec2{ panelPos.x + panelSize.x - 72, panelPos.y + 70 }, 60);
+    if (state.aiPromptState.active && KeyEnter.down()) {
+        submit = true;
+    }
+    if (submit && !state.aiPrompt.isEmpty()) {
+        applyAiPrompt(state, ctx, state.aiPrompt);
+        state.aiPrompt.clear();
+        state.aiPromptState = TextEditState{};
+    }
+
+    if (!state.aiResponse.isEmpty()) {
+        font(state.aiResponse).draw(panelPos + Vec2{ 12, 100 }, Palette::Skyblue);
+    }
+}
+
+void GameInputHandler::applyAiPrompt(GameState& state, const FrameContext& ctx, const String& prompt) {
+    auto has = [&](const String& key) { return prompt.includes(key); };
+
+    if (has(U"背景") || has(U"background") || has(U"Background") || has(U"BACKGROUND")) {
+        if (has(U"青") || has(U"blue") || has(U"Blue") || has(U"BLUE")) {
+            state.backgroundColor = ColorF{ 0.05, 0.12, 0.25 };
+            state.aiResponse = U"背景色を青に変更しました。";
+            return;
+        }
+        if (has(U"赤") || has(U"red") || has(U"Red") || has(U"RED")) {
+            state.backgroundColor = ColorF{ 0.25, 0.08, 0.08 };
+            state.aiResponse = U"背景色を赤に変更しました。";
+            return;
+        }
+        if (has(U"緑") || has(U"green") || has(U"Green") || has(U"GREEN")) {
+            state.backgroundColor = ColorF{ 0.08, 0.2, 0.12 };
+            state.aiResponse = U"背景色を緑に変更しました。";
+            return;
+        }
+        if (has(U"白") || has(U"white") || has(U"White") || has(U"WHITE")) {
+            state.backgroundColor = ColorF{ 0.9, 0.9, 0.9 };
+            state.aiResponse = U"背景色を白に変更しました。";
+            return;
+        }
+        if (has(U"黒") || has(U"black") || has(U"Black") || has(U"BLACK")) {
+            state.backgroundColor = ColorF{ 0.0, 0.0, 0.0 };
+            state.aiResponse = U"背景色を黒に変更しました。";
+            return;
+        }
+    }
+
+    if (has(U"cube") || has(U"Cube") || has(U"CUBE") || has(U"キューブ") || has(U"立方体")) {
+        spawnCubeNearCamera(state, ctx);
+        state.aiResponse = U"キューブを追加しました。";
+        return;
+    }
+
+    if (has(U"light") || has(U"Light") || has(U"LIGHT") || has(U"ライト")) {
+        spawnLightNearCamera(state, ctx);
+        state.aiResponse = U"ライトを追加しました。";
+        return;
+    }
+
+    if (has(U"カメラ") && (has(U"リセット") || has(U"reset") || has(U"Reset") || has(U"RESET"))) {
+        state.camera = Camera{};
+        state.aiResponse = U"カメラを初期位置に戻しました。";
+        return;
+    }
+
+    state.aiResponse = U"対応コマンド: 背景(青/赤/緑/白/黒), キューブ追加, ライト追加, カメラリセット";
+}
+
+void GameInputHandler::spawnCubeNearCamera(GameState& state, const FrameContext& ctx) {
+    V3 Fh = state.camera.forwardH();
+    V3 Rv = state.camera.right();
+    double ang = Random(-Math::Pi / 4.0, Math::Pi / 4.0);
+    V3 dir = norm(std::cos(ang) * (-1 * Fh) + std::sin(ang) * Rv);
+    double dist = Random(2.0, 4.0) * (2.0 * HALF);
+    double yRand = Random(0, 2) * (2.0 * HALF);
+    V3 hit = V3{ ctx.cam.x, yRand, ctx.cam.z } + dist * dir;
+    GKey g{ gIdx(hit.x), gIdx(hit.z) };
+    GKey place = findNearestEmpty(state, g);
+    if (state.grid.find(place) == state.grid.end()) {
+        state.cubes.push_back({ { gPos(place.gx), yRand, gPos(place.gz) } });
+        state.grid.insert(place);
+    }
+}
+
+void GameInputHandler::spawnLightNearCamera(GameState& state, const FrameContext& ctx) {
+    Light lt;
+    lt.c = ctx.cam + ctx.forward * 100.0;
+    V3 from{ 0,-1,0 };
+    V3 to = norm(ctx.forward);
+    double cosA = dot(from, to);
+    if (cosA > 1.0) cosA = 1.0; if (cosA < -1.0) cosA = -1.0;
+    V3 axis = cross(from, to);
+    if (len(axis) < 1e-6) axis = { 1,0,0 };
+    double angle = std::acos(cosA);
+    lt.q = qAxisAngle(axis, angle);
+    state.lights.push_back(lt);
+    state.lightSel = static_cast<int>(state.lights.size()) - 1;
 }
 
 void GameInputHandler::tryCreateCube(GameState& state, const FrameContext& ctx) {
