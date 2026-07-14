@@ -1,8 +1,13 @@
-﻿#pragma once
+﻿/**
+ * @file Light.hpp
+ * @brief 方向ライトの位置、回転、表示用スケール、光量と選択判定を管理します。
+ */
+#pragma once
 #include "Math.hpp"
 #include "IHoverable.hpp"
 #include "Cube.hpp"
 
+/// 方向と光量を持つ編集可能なライトです。
 struct Light : public IHoverable {
     // Center position of the light gizmo
     V3   c{ 0,0,0 };

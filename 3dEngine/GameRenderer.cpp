@@ -1,4 +1,8 @@
-﻿#include "GameRenderer.hpp"
+﻿/**
+ * @file GameRenderer.cpp
+ * @brief 透視投影、近クリップ、簡易ライティング、深度順描画、ギズモ表示を実装します。
+ */
+#include "GameRenderer.hpp"
 #include "RenderUtils.hpp"
 #include <Siv3D.hpp>
 #include <algorithm>
@@ -8,16 +12,19 @@ using namespace s3d;
 namespace {
 	constexpr double kNearPlane = NEAR_Z - CAM_DIST;
 
-    bool isInsideNearPlane(const V3& v) {
+    /// カメラ座標上の頂点が近クリップ面より前にあるか判定します。
+bool isInsideNearPlane(const V3& v) {
         return v.z >= kNearPlane;
     }
 
-    V3 intersectNearPlane(const V3& a, const V3& b) {
+    /// 辺と近クリップ面の交点を線形補間で求めます。
+V3 intersectNearPlane(const V3& a, const V3& b) {
         const double t = (kNearPlane - a.z) / (b.z - a.z);
         return a + t * (b - a);
     }
 
-    std::vector<V3> clipPolygonToNearPlane(const std::vector<V3>& input) {
+    /// ポリゴンを近クリップ面で切り取り、カメラ直前での消失や投影崩れを防ぎます。
+std::vector<V3> clipPolygonToNearPlane(const std::vector<V3>& input) {
         if (input.empty()) {
             return {};
         }
@@ -44,7 +51,8 @@ namespace {
         return output;
     }
 
-    std::vector<std::array<V3, 3>> clipTriangleToNearPlane(const std::array<V3, 3>& tri) {
+    /// クリップ後の多角形を描画可能な三角形へ再分割します。
+std::vector<std::array<V3, 3>> clipTriangleToNearPlane(const std::array<V3, 3>& tri) {
         std::vector<V3> poly{ tri[0], tri[1], tri[2] };
         std::vector<V3> clipped = clipPolygonToNearPlane(poly);
         if (clipped.size() < 3) {
@@ -66,6 +74,7 @@ namespace {
     }
 }
 
+/// オブジェクトの投影・陰影・深度順描画と、編集用ギズモを一括して描画します。
 void GameRenderer::drawFrame(const GameState& state, const FrameContext& ctx, bool free) {
     auto scr = [&](V3 w) { return ctx.project(w); };
     const V3 cam = ctx.cam;
@@ -81,6 +90,8 @@ void GameRenderer::drawFrame(const GameState& state, const FrameContext& ctx, bo
     for (size_t i = 0; i < state.cubes.size(); ++i) {
         drawOrder[i] = { dot(state.cubes[i].c - cam, F), static_cast<int>(i) };
     }
+    // 遠いオブジェクトから描く簡易的なPainter's Algorithmとして深度順に並べます。
+    // 同じ深度では元の順序を維持し、描画のちらつきを抑えるためstable_sortを使用します。
     std::stable_sort(drawOrder.begin(), drawOrder.end(),
         [&](const auto& a, const auto& b) {
             if (std::abs(a.first - b.first) > DEP_TOL) {
@@ -127,6 +138,7 @@ void GameRenderer::drawFrame(const GameState& state, const FrameContext& ctx, bo
 
             for (const auto& lt : state.lights) {
                 V3 L = -1 * lt.dir();
+                // Lambert反射として面法線と光方向の内積を使用し、裏面側の光は0に制限します。
                 double diff = Max(0.0, dot(nW, L));
                 shade += lt.intensity * diff;
             }

@@ -1,27 +1,36 @@
-﻿#include "Camera.hpp"
+﻿/**
+ * @file Camera.cpp
+ * @brief エディタ用自由カメラとプレイ用FPSカメラの向き・移動を更新します。
+ */
+#include "Camera.hpp"
 #include <Siv3D.hpp>
 
+/// カメラのヨー角とピッチ角から、正規化された前方向ベクトルを求めます。
 V3 Camera::forward() const {
     return norm({ std::cos(pitch) * std::sin(yaw),
                   std::sin(pitch),
                  -std::cos(pitch) * std::cos(yaw) });
 }
 
+/// 前方向ベクトルから水平方向の右ベクトルを求めます。
 V3 Camera::right() const {
     V3 F = forward();
     return norm({ -F.z, 0, F.x });
 }
 
+/// 右方向と前方向の外積から、カメラの上方向を求めます。
 V3 Camera::up() const {
     return norm(cross(right(), forward()));
 }
 
+/// 上下成分を除いた水平方向の前ベクトルを求め、地上移動に使用します。
 V3 Camera::forwardH() const {
     V3 F = forward();
     V3 h{ F.x, 0, F.z };
     return norm((h.x == 0 && h.z == 0) ? V3{ 0,0,1 } : h);
 }
 
+/// 自由カメラとFPSモードを切り替え、視点回転・移動・パン・ズームを更新します。
 void Camera::update(double dt, const s3d::Vec2& winF, const s3d::Point& winP) {
     using namespace s3d;
     if (KeyBackspace.down()) free = true;

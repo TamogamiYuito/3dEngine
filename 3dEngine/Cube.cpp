@@ -1,10 +1,17 @@
+﻿/**
+ * @file Cube.cpp
+ * @brief 立方体のグリッド座標変換と、スクリーン上でのホバー判定を実装します。
+ */
 #include "Cube.hpp"
 #include "RenderUtils.hpp"
 #include <cmath>
 
+/// ワールド座標を立方体配置用のグリッド番号へ変換します。
 int gIdx(double v) { return (int)std::round(v / (2 * HALF)); }
+/// グリッド番号をワールド座標へ戻します。
 double gPos(int g) { return g * 2.0 * HALF; }
 
+/// 立方体の8頂点を画面へ投影し、スクリーン上の外接矩形でホバーを判定します。
 bool Cube::checkHovered(const s3d::Vec2& cur, double cx, double cy,
                         V3 cam, V3 Rv, V3 U, V3 F, double& depth) const {
     auto scr = [&](V3 w) { return screenProject(w, cam, Rv, U, F, cx, cy); };

@@ -1,9 +1,14 @@
-﻿#pragma once
+﻿/**
+ * @file Math.hpp
+ * @brief 独自の3次元ベクトル、透視投影、クォータニオン、当たり判定で使用する数学処理を定義します。
+ */
+#pragma once
 #include <Siv3D.hpp>
 #include <cmath>
 #include <limits>
 #include <algorithm>
 
+/// 3次元ベクトルを表す最小構成の型です。
 struct V3 {
     double x, y, z;
 };
@@ -23,6 +28,7 @@ inline V3      cross(V3 a, V3 b) {
 inline double  len(V3 v) { return std::sqrt(dot(v, v)); }
 inline V3      norm(V3 v) { double l = len(v); return (l > 1e-9) ? v / l : V3{ 0,0,0 }; }
 
+/// 投影後の2次元座標を表します。
 struct P2 {
     double x, y;
 };
@@ -62,6 +68,7 @@ constexpr double PITCH_LIM = s3d::Math::ToRadians(85);
 constexpr double PAN_SPD = 200;
 constexpr double DOLLY_SPD = 400;
 
+/// 回転を表現するクォータニオンです。
 struct Quat {
     double w, x, y, z;
 };

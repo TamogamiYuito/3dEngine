@@ -1,12 +1,18 @@
+﻿/**
+ * @file Gizmo.hpp
+ * @brief 移動・回転・拡縮モード、各操作ハンドル、ドラッグ開始時の状態を定義します。
+ */
 #pragma once
 #include "Math.hpp"
 
+/// 現在のギズモ操作モードを表します。
 enum class Mode {
     Move,
     Rotate,
     Scale
 };
 
+/// 選択中または操作中のギズモ軸を表します。
 enum class Handle {
     None,
     MoveX,
@@ -21,6 +27,7 @@ enum class Handle {
     ScaleUniform
 };
 
+/// ドラッグ開始時の位置・回転・拡縮を保存します。
 struct Drag {
     bool on = false;
     s3d::Vec2 cur0;

@@ -1,7 +1,12 @@
+﻿/**
+ * @file Light.cpp
+ * @brief ライトギズモの8頂点をスクリーンへ投影し、カーソルとの重なりを判定します。
+ */
 #include "Light.hpp"
 #include "RenderUtils.hpp"
 #include <cmath>
 
+/// ライトギズモを画面へ投影し、カーソルとの重なりとカメラからの距離を求めます。
 bool Light::checkHovered(const s3d::Vec2& cur, double cx, double cy,
                          V3 cam, V3 Rv, V3 U, V3 F, double& depth) const {
     auto scr = [&](V3 w) { return screenProject(w, cam, Rv, U, F, cx, cy); };

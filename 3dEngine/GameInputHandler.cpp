@@ -1,10 +1,15 @@
-﻿#include "GameInputHandler.hpp"
+﻿/**
+ * @file GameInputHandler.cpp
+ * @brief オブジェクト生成、選択、複数選択、削除、ギズモ操作などの入力処理を実装します。
+ */
+#include "GameInputHandler.hpp"
 #include "RenderUtils.hpp"
 #include <Siv3D.hpp>
 #include <algorithm>
 
 using namespace s3d;
 
+/// 入力処理を機能ごとに分割し、一定の順序で実行します。
 void GameInputHandler::processInput(GameState& state, const FrameContext& ctx, double dt, bool free) {
     updateModeState(state, free);
     handleCreationUI(state, ctx, dt, free);
@@ -15,6 +20,7 @@ void GameInputHandler::processInput(GameState& state, const FrameContext& ctx, d
     updateDrag(state, ctx);
 }
 
+/// W・E・Rキーから移動・回転・拡縮モードを切り替えます。
 void GameInputHandler::updateModeState(GameState& state, bool free) {
     if (free && !state.drag.on) {
         if (KeyW.down()) state.mode = Mode::Move;
@@ -23,6 +29,7 @@ void GameInputHandler::updateModeState(GameState& state, bool free) {
     }
 }
 
+/// 自由カメラ時のみ、生成・削除・ライト調整用UIを処理します。
 void GameInputHandler::handleCreationUI(GameState& state, const FrameContext& ctx, double dt, bool free) {
     if (!free) {
         return;
@@ -35,6 +42,7 @@ void GameInputHandler::handleCreationUI(GameState& state, const FrameContext& ct
     adjustSelectedLightIntensity(state, dt);
 }
 
+/// カメラ前方付近の空いているグリッドを探し、新しい立方体を配置します。
 void GameInputHandler::tryCreateCube(GameState& state, const FrameContext& ctx) {
     if (!SimpleGUI::Button(U"+ Cube", { 20,20 })) {
         return;
@@ -55,6 +63,7 @@ void GameInputHandler::tryCreateCube(GameState& state, const FrameContext& ctx) 
     }
 }
 
+/// カメラ前方へ方向ライトを生成し、視線方向へ向く回転を設定します。
 void GameInputHandler::tryCreateLight(GameState& state, const FrameContext& ctx) {
     if (!SimpleGUI::Button(U"+ Light", { 20,50 })) {
         return;
@@ -74,6 +83,7 @@ void GameInputHandler::tryCreateLight(GameState& state, const FrameContext& ctx)
     state.lightSel = static_cast<int>(state.lights.size()) - 1;
 }
 
+/// 選択中の立方体を後ろのインデックスから削除し、選択情報のずれを防ぎます。
 void GameInputHandler::tryDeleteSelectedCube(GameState& state) {
     if (state.sel == -1 || state.drag.on) {
         return;
@@ -93,6 +103,7 @@ void GameInputHandler::tryDeleteSelectedCube(GameState& state) {
         }
     }
 
+    // vectorの後方から削除し、未削除要素のインデックスが途中で変化しないようにします。
     std::sort(deleteIndices.begin(), deleteIndices.end(), std::greater<int>());
     for (int idx : deleteIndices) {
         const Cube& cb = state.cubes[idx];
@@ -121,6 +132,7 @@ void GameInputHandler::adjustSelectedLightIntensity(GameState& state, double dt)
     SimpleGUI::Slider(U"Intensity", state.lights[state.lightSel].intensity, 0.0, 5.0, Vec2{ 20,110 });
 }
 
+/// オブジェクトとギズモのうち、カーソルが指している対象を更新します。
 void GameInputHandler::updateHoverState(GameState& state, const FrameContext& ctx, bool free) {
     state.hoverHd = Handle::None;
     state.hoverIdx = detectHoveredCube(state, ctx.cursor, ctx.windowHalf.x, ctx.windowHalf.y);
@@ -213,6 +225,7 @@ void GameInputHandler::updateHoverState(GameState& state, const FrameContext& ct
     }
 }
 
+/// クリック対象を選択し、ギズモ操作の場合はドラッグ開始時の状態を保存します。
 void GameInputHandler::handleSelectionAndDragStart(GameState& state, const FrameContext& ctx, bool free) {
     if (!(free && MouseL.down())) {
         return;
@@ -303,6 +316,7 @@ void GameInputHandler::handleSelectionAndDragStart(GameState& state, const Frame
     }
 }
 
+/// ドラッグ終了時にグリッド情報を戻し、一時的な操作状態を初期化します。
 void GameInputHandler::handleDragEnd(GameState& state) {
     if (MouseL.up()) {
         if (state.drag.on && state.sel != -1 && (state.activeHd == Handle::MoveX || state.activeHd == Handle::MoveZ)) {
@@ -319,6 +333,7 @@ void GameInputHandler::handleDragEnd(GameState& state) {
     }
 }
 
+/// カーソル移動量を各軸の移動・回転・拡縮量へ変換し、選択対象へ適用します。
 void GameInputHandler::updateDrag(GameState& state, const FrameContext& ctx) {
     if (!(state.drag.on && (state.sel != -1 || state.lightSel != -1))) {
         return;
@@ -415,6 +430,7 @@ void GameInputHandler::updateDrag(GameState& state, const FrameContext& ctx) {
     }
 }
 
+/// 空白部分からのドラッグを矩形選択として記録します。
 void GameInputHandler::updateSelectionBox(GameState& state, const FrameContext& ctx, bool free) {
     if (!free || state.drag.on || state.activeHd != Handle::None) {
         return;
@@ -440,6 +456,7 @@ void GameInputHandler::updateSelectionBox(GameState& state, const FrameContext& 
     }
 }
 
+/// 選択矩形内へ投影された立方体を複数選択します。
 void GameInputHandler::applySelectionBox(GameState& state, const FrameContext& ctx) {
     Vec2 minPos{ std::min(state.selectionBox.start.x, state.selectionBox.current.x),
                  std::min(state.selectionBox.start.y, state.selectionBox.current.y) };
@@ -463,6 +480,7 @@ void GameInputHandler::applySelectionBox(GameState& state, const FrameContext& c
         }
     }
 
+    // 削除・追加を伴う選択集合を一度作り直し、無効なインデックスが残ることを防ぎます。
     state.selectedCubes = std::move(nextSelection);
     if (!state.selectedCubes.empty()) {
         state.sel = *std::min_element(state.selectedCubes.begin(), state.selectedCubes.end());
@@ -472,6 +490,7 @@ void GameInputHandler::applySelectionBox(GameState& state, const FrameContext& c
     }
 }
 
+/// vector削除後に変化したインデックスへ、選択情報を追従させます。
 void GameInputHandler::updateSelectionAfterErase(GameState& state, int removedIdx) {
     std::unordered_set<int> nextSelection;
     for (int idx : state.selectedCubes) {
@@ -492,6 +511,7 @@ void GameInputHandler::updateSelectionAfterErase(GameState& state, int removedId
     }
 }
 
+/// ホバー候補のうち、カメラに最も近い立方体を選びます。
 int GameInputHandler::detectHoveredCube(GameState& state, const Vec2& cur, double cx, double cy) {
     V3 cam = state.camera.cam;
     V3 Rv = state.camera.right();
@@ -511,6 +531,7 @@ int GameInputHandler::detectHoveredCube(GameState& state, const Vec2& cur, doubl
     return hover;
 }
 
+/// ホバー候補のうち、カメラに最も近いライトとライト用ギズモを判定します。
 int GameInputHandler::detectHoveredLight(GameState& state, const Vec2& cur, double cx, double cy, bool free) {
     V3 cam = state.camera.cam;
     V3 Rv = state.camera.right();
@@ -620,6 +641,7 @@ int GameInputHandler::detectHoveredLight(GameState& state, const Vec2& cur, doub
     return hover;
 }
 
+/// 指定グリッドが使用中の場合、範囲を広げながら最寄りの空き位置を探索します。
 GKey GameInputHandler::findNearestEmpty(GameState& state, GKey start) {
     if (state.grid.find(start) == state.grid.end()) return start;
     constexpr int MAX_RADIUS = 20;

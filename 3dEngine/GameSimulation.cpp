@@ -1,16 +1,22 @@
-﻿#include "GameSimulation.hpp"
+﻿/**
+ * @file GameSimulation.cpp
+ * @brief プレイモード時のFPS移動、重力、ジャンプ、カプセルと立方体の当たり判定を実装します。
+ */
+#include "GameSimulation.hpp"
 #include <Siv3D.hpp>
 #include <algorithm>
 #include <cmath>
 
 using namespace s3d;
 
+/// プレイモード時だけ移動と当たり判定のシミュレーションを更新します。
 void GameSimulation::updateSimulation(GameState& state, double dt, bool free) {
     if (!free) {
         handleFPSMovement(state, dt);
     }
 }
 
+/// FPS移動、重力、ジャンプ、床判定、壁からの押し戻しを処理します。
 void GameSimulation::handleFPSMovement(GameState& state, double dt) {
     V3 F  = state.camera.forward();
     V3 Rv = state.camera.right();
@@ -30,6 +36,7 @@ void GameSimulation::handleFPSMovement(GameState& state, double dt) {
         double hy = HALF * cb.s.y;
         double hz = HALF * cb.s.z;
 
+        // 回転した立方体を軸平行として扱えるよう、プレイヤー位置を立方体のローカル座標へ変換します。
         Quat invQ = qConj(cb.q);
         V3 posL  = qRotate(invQ, pos - cb.c);
         V3 footL = qRotate(invQ, V3{ pos.x, foot, pos.z } - cb.c);
@@ -57,6 +64,7 @@ void GameSimulation::handleFPSMovement(GameState& state, double dt) {
         double clz = std::clamp(posL.z, -hz, hz);
         double dx = posL.x - clx, dz = posL.z - clz;
         double d2 = dx * dx + dz * dz;
+        // カプセルの水平方向を円として扱い、OBB内部へのめり込み量だけ外側へ押し戻します。
         if (d2 < R * R - 1e-6) {
             double d = std::sqrt(std::max(d2, 1e-6));
             V3 pushL{ dx,0,dz }; pushL = ((R - d) / d) * pushL;

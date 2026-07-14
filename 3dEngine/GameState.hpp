@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/**
+ * @file GameState.hpp
+ * @brief オブジェクト、ライト、選択状態、ドラッグ状態などゲーム全体の可変状態を保持します。
+ */
+#pragma once
 #include "Camera.hpp"
 #include "Cube.hpp"
 #include "Gizmo.hpp"
@@ -7,6 +11,7 @@
 #include <unordered_set>
 #include <vector>
 
+/// 1フレーム内で共有する投影用カメラ情報です。
 struct FrameContext {
     s3d::Vec2 cursor;
     s3d::Vec2 windowHalf;
@@ -19,12 +24,14 @@ struct FrameContext {
     std::optional<double> cursorAngle(s3d::Vec2 p, V3 axis, V3 pivot) const;
 };
 
+/// ドラッグによる矩形選択の開始位置と現在位置を保持します。
 struct SelectionBox {
     bool on = false;
     s3d::Vec2 start{ 0, 0 };
     s3d::Vec2 current{ 0, 0 };
 };
 
+/// ゲーム全体で共有する可変状態を一か所にまとめます。
 struct GameState {
     std::vector<Cube> cubes;
     std::unordered_set<GKey, GHash> grid;

@@ -1,6 +1,11 @@
-﻿#pragma once
+﻿/**
+ * @file GameInputHandler.hpp
+ * @brief エディタ操作に関する入力処理を機能ごとのメソッドへ分割して宣言します。
+ */
+#pragma once
 #include "GameState.hpp"
 
+/// 編集操作に関する入力だけを担当します。
 class GameInputHandler {
 public:
     void processInput(GameState& state, const FrameContext& ctx, double dt, bool free);

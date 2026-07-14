@@ -1,7 +1,12 @@
-﻿#pragma once
+﻿/**
+ * @file IHoverable.hpp
+ * @brief 立方体とライトで共通利用するホバー判定インターフェースを定義します。
+ */
+#pragma once
 #include "Math.hpp"
 #include <Siv3D.hpp>
 
+/// スクリーン上で選択可能なオブジェクトの共通インターフェースです。
 class IHoverable {
 public:
     virtual ~IHoverable() = default;

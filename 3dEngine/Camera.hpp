@@ -1,7 +1,12 @@
+﻿/**
+ * @file Camera.hpp
+ * @brief カメラ位置、回転、垂直速度、操作モードと方向ベクトル計算を定義します。
+ */
 #pragma once
 #include "Math.hpp"
 #include <Siv3D.hpp>
 
+/// 編集用自由カメラとプレイ用FPSカメラの状態を保持します。
 struct Camera {
     V3 pos{ 0, HALF + EYE, -200 };
     V3 cam{ pos };
@@ -16,6 +21,3 @@ struct Camera {
     V3 up() const;
     V3 forwardH() const;
 };
-
-
-

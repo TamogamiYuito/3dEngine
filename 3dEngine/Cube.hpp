@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/**
+ * @file Cube.hpp
+ * @brief 立方体の頂点・辺・面データ、グリッドキー、位置・回転・拡縮情報を定義します。
+ */
+#pragma once
 #include <array>
 #include <unordered_set>
 #include <cmath>
@@ -35,6 +39,7 @@ struct GHash {
 int    gIdx(double v);
 double gPos(int g);
 
+/// 位置・回転・拡縮を持つ編集対象の立方体です。
 struct Cube : public IHoverable {
     V3 c;
     Quat q{1,0,0,0};
